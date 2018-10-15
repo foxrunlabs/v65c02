@@ -1,0 +1,219 @@
+;===============================================================================
+;Copyright (C) 2018 Ryan Clarke
+;
+;This program is free software (firmware): you can redistribute it and/or modify
+;it under the terms of the GNU General Public License as published by
+;the Free Software Foundation, either version 3 of the License, or
+;(at your option) any later version.
+;
+;This program is distributed in the hope that it will be useful,
+;but WITHOUT ANY WARRANTY; without even the implied warranty of
+;MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;GNU General Public License for more details.
+;
+;You should have received a copy of the GNU General Public License
+;along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;===============================================================================
+
+;===============================================================================
+; Program   : v65C02 BIOS
+; File Name : xmodem.a65
+; Project   : v65C02 8-bit Computer
+; Author    : Ryan Clarke
+; E-mail    : kj6msg@icloud.com
+;===============================================================================
+; Purpose : XMODEM program for the v65C02 BIOS.
+;===============================================================================
+
+
+.PC02
+
+.INCLUDE    "ascii.inc"
+.INCLUDE    "conio.inc"
+.INCLUDE    "memory.inc"
+.INCLUDE    "uart.inc"
+
+.IMPORT     cputs
+.IMPORT     putch
+.IMPORT     u16tod
+.IMPORT     uart_putc
+
+.EXPORT     xmodem
+
+
+;= XMODEM RECEIVER =============================================================
+
+.CODE
+
+xmodem:     lda     #1                      ; first block = 1
+            sta     $E0                     ; $00E0 = block number
+            stz     $E1                     ; $00E1 = checksum
+            
+            lda     #$03
+            sta     $E4
+            stz     $E3                     ; ($E3) = RAM address
+            
+            jsr     purge                   ; purge the UART receiver
+            
+            lda     #NAK
+            jsr     uart_putc               ; send NAK to trigger sender
+            
+@start:     jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     $E2                     ; load error code
+            beq     @cont                   ; no error, start the process
+            jmp     @timeout                ; error > 0? timeout
+            
+@cont:      lda     UART_RXREG              ; get data from UART
+            cmp     #EOT                    ; compared with <EOT>
+            beq     @end                    ; data == <EOT>? end recv
+            cmp     #SOH                    ; compared with <SOH>
+            beq     @block                  ; data == <SOH>? get block #
+            jmp     @fail                   ; else, we failed
+
+@block:     jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     $E2                     ; load error code
+            bne     @timeout                ; error > 0? timeout
+            
+            lda     UART_RXREG              ; read UART data
+            cmp     $E0                     ; compare with expected block #
+            beq     @block2
+            jmp     @fail                   ; data != expected block, failure         
+            
+@block2:    jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     $E2                     ; load error code
+            bne     @timeout                ; error > 0? timeout
+            
+            lda     UART_RXREG              ; read UART data to clear it
+            
+            ldy     #128                    ; 128 bytes of data per block            
+@data:      jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     $E2                     ; load error code
+            bne     @timeout                ; error > 0? timeout
+            
+            lda     UART_RXREG              ; read UART data
+            sta     ($E3)                   ; store to RAM
+            
+            clc
+            adc     $E1
+            sta     $E1                     ; checksum += data (no carry)
+            
+            lda     $E3
+            clc
+            adc     #$01
+            sta     $E3
+            lda     $E4
+            adc     #$00
+            sta     $E4                     ; increment 16-bit addr at $00E3
+            
+            dey                             ; byte counter--
+            bne     @data                   ; counter > 0? keep getting data
+            
+            lda     $E4                     ; load RAM address MSB
+            cmp     #$80                    ; are we outside user RAM?
+            beq     @toolarge               ; we are, failure
+
+@chksum:    jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     $E2                     ; load error code
+            bne     @timeout                ; error > 0? timeout
+            
+            lda     UART_RXREG              ; read UART data
+            cmp     $E1                     ; compare with computed checksum
+            bne     @fail                   ; not equal? failure
+            
+            lda     #ACK
+            jsr     uart_putc               ; send <ACK>
+            inc     $E0                     ; increment block
+            stz     $E1                     ; reset checksum
+            bra     @start                  ; wait for another block
+
+@end:       lda     #ACK
+            jsr     uart_putc               ; send <ACK>
+            
+            lda     #$00
+            dec     $E0                     ; adjust blocks received by -1
+            lsr     $E0                     ; divide by 2 (blocks-- in MSB)
+            ldx     $E0                     ; save MSB to X
+            ror     A                       ; 16-bit division by two (X,A)
+            jsr     u16tod                  ; convert to string
+            jsr     cputs                   ; print bytes received to screen
+            
+            ldx     #.HIBYTE(complete_msg)
+            lda     #.LOBYTE(complete_msg)
+            jsr     cputs                   ; complete string
+            bra     @done
+            
+@timeout:   ldx     #.HIBYTE(timeout_msg)
+            lda     #.LOBYTE(timeout_msg)
+            jsr     cputs                   ; timeout string
+            bra     @done                   ; done
+
+@toolarge:  ldx     #.HIBYTE(toolarge_msg)
+            lda     #.LOBYTE(toolarge_msg)
+            jsr     cputs                   ; file too large string
+            bra     @done                   ; done
+
+@fail:      ldx     #.HIBYTE(fail_msg)
+            lda     #.LOBYTE(fail_msg)
+            jsr     cputs                   ; failed string
+
+@done:      rts
+
+
+;= PURGE =======================================================================
+
+.CODE
+
+purge:      lda     #$80
+            sta     TMR_TIMER08
+            lda     #$F0
+            sta     TMR_TIMER16
+            lda     #$FA
+            sta     TMR_TIMER24
+            lda     #$02
+            sta     TMR_TIMER32             ; Timer set for 1 second
+            
+@loop:      lda     UART_RXREG              ; clear RXREG
+            lda     TMR_STATUS              ; read timer STATUS register
+            bit     #%00000001              ; test OVRFL flag
+            beq     @loop                   ; OVRFL == 0? loop
+            
+            rts
+
+
+;= ONE SECOND RECEIVE ==========================================================
+
+.CODE
+
+u_getc_1s:  stz     $E2                     ; reset error code
+            
+            lda     #$80
+            sta     TMR_TIMER08
+            lda     #$F0
+            sta     TMR_TIMER16
+            lda     #$FA
+            sta     TMR_TIMER24
+            lda     #$02
+            sta     TMR_TIMER32             ; set timer for 1 second
+            
+@loop:      lda     UART_STATUS             ; read UART STATUS register
+            bit     #RXFULL                 ; check RXFULL flag
+            bne     @done                   ; RXFULL == 0? check timer
+            
+            lda     TMR_STATUS              ; read timer STATUS register
+            bit     #%00000001              ; check OVRFL flag
+            beq     @loop                   ; OVRFL flag == 0? loop
+            
+            inc     $E2                     ; time out
+            
+@done:      lda     UART_RXREG              ; read UART data
+            rts
+
+
+;= STRINGS =====================================================================
+
+.RODATA
+
+timeout_msg:        .BYTE "Timeout", LF, NUL
+fail_msg:           .BYTE "Failed", LF, NUL
+complete_msg:       .BYTE " bytes received", LF, NUL
+toolarge_msg:       .BYTE "File too large", LF, NUL

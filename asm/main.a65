@@ -44,7 +44,7 @@
 
 ;= CONSTANTS ===================================================================
 
-.DEFINE     VERSION "0.2.1"
+.DEFINE     VERSION "0.3.0"
 
 EN = %00000001                          ; EN bit of VGA STATUS register
 

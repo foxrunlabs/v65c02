@@ -27,8 +27,13 @@
 
 
 NUL = $00
+SOH = $01
+EOT = $04
+ACK = $06
 BS  = $08
 TAB = $09
 LF  = $0A
 CR  = $0D
+NAK = $15
+CAN = $18
 ESC = $1B

@@ -43,6 +43,7 @@
 .IMPORT     putch
 .IMPORT     u8toh
 .IMPORT     u16itod
+.IMPORT     xmodem
 
 .EXPORT     monitor
 
@@ -147,7 +148,7 @@ monitor:    cursor_on                   ; turn cursor on
             cmp     #'r'
             beq     run                 ; run command?
             cmp     #'x'
-            beq     xmodem              ; xmodem command?
+            beq     xrecv               ; xmodem command?
             bra     invalid             ; invalid command
             
 @single:    lda     input
@@ -215,7 +216,8 @@ write:      jsr     memwrite
 
 ;= XMODEM ======================================================================
 
-xmodem:     jmp     monitor
+xrecv:      jsr     xmodem
+            jmp     monitor
 
 
 ;= MEMORY DUMP =================================================================
