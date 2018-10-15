@@ -146,8 +146,8 @@ monitor:    cursor_on                   ; turn cursor on
             beq     help                ; help command?
             cmp     #'r'
             beq     run                 ; run command?
-            cmp     #'z'
-            beq     zmodem              ; zmodem command?
+            cmp     #'x'
+            beq     xmodem              ; xmodem command?
             bra     invalid             ; invalid command
             
 @single:    lda     input
@@ -213,9 +213,9 @@ write:      jsr     memwrite
             jmp     monitor
 
 
-;= ZMODEM ======================================================================
+;= XMODEM ======================================================================
 
-zmodem:     jmp     monitor
+xmodem:     jmp     monitor
 
 
 ;= MEMORY DUMP =================================================================
@@ -342,7 +342,7 @@ help_msg1:  .BYTE "dump", TAB, "d address", LF
 help_msg2:  .BYTE "help", TAB, "h", LF
 help_msg3:  .BYTE "run", TAB, "r", LF 
 help_msg4:  .BYTE "write", TAB, "w address byte", LF
-help_msg5:  .BYTE "ymodem", TAB, "y", LF, NUL
+help_msg5:  .BYTE "xmodem", TAB, "x", LF, NUL
 
 
 ;= VARIABLES ===================================================================
