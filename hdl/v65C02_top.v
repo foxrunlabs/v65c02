@@ -265,6 +265,26 @@ module v65C02_Top
         );
     
     
+/* 32-BIT TIMER ***************************************************************/
+    
+    localparam TMR_CONTROL = 8'h94;         // tmr control bus = $9400->$94FF
+    
+    wire       tmr_en;                      // tmr control bus select
+    wire [7:0] tmr_dout;                    // 8-bit data output
+    
+    assign tmr_en = (cpu_addr[15:8] == TMR_CONTROL);
+    
+    TimerController TimerController
+        (
+        .clk_i (clk_cpu),
+        .en_i  (tmr_en),
+        .we_i  (cpu_we),
+        .addr_i(cpu_addr[7:0]),
+        .din_i (cpu_dout),
+        .dout_o(tmr_dout)
+        );
+    
+    
 /* MEMORY DECODING LOGIC ******************************************************/
     
     reg [7:0] cpu_addr_p1_msb_reg;          // v65C02 address MSB pipeline
@@ -282,6 +302,7 @@ module v65C02_Top
             VGA_CONTROL:  cpu_din = vga_dout;
             UART_CONTROL: cpu_din = uart_dout;
             KBD_CONTROL:  cpu_din = kbd_dout;
+            TMR_CONTROL:  cpu_din = tmr_dout;
             BIOS_ADDRH:   cpu_din = bios_dout;
             default:      cpu_din = 8'h00;
         endcase
