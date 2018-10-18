@@ -90,7 +90,7 @@ monitor:    cursor_on                   ; turn cursor on
             cpx     #9
             bcs     @getline            ; ignore input if > 9 characters
             
-            sta     input, X            ; add character to command string
+            sta     INPUT, X            ; add character to command string
             inx                         ; next string position
             bra     @getline            ; keep getting characters
             
@@ -122,25 +122,25 @@ monitor:    cursor_on                   ; turn cursor on
             
             bra     @getline            ; keep getting characters
 
-@linefeed:  stz     input, X            ; add NUL terminator
+@linefeed:  stz     INPUT, X            ; add NUL terminator
 
 @isempty:   cpx     #0
             beq     monitor             ; empty input string? try again
             
             ; validate input string format
-            lda     input+1             ; check 2nd character
+            lda     INPUT+1             ; check 2nd character
             beq     @noparams           ; NUL? no parameters
             cmp     #' '
             bne     invalid             ; Not a space? invalid command
             
-            lda     input+6             ; check 7th character
+            lda     INPUT+6             ; check 7th character
             beq     @single             ; NUL? only one parameter
             cmp     #' '
             bne     invalid             ; Not a space? invalid command
             bra     @double             ; two parameters
             
             ; parse command
-@noparams:  lda     input
+@noparams:  lda     INPUT
             cmp     #'c'
             beq     cls                 ; clear screen?
             cmp     #'h'
@@ -151,18 +151,18 @@ monitor:    cursor_on                   ; turn cursor on
             beq     xrecv               ; xmodem command?
             bra     invalid             ; invalid command
             
-@single:    lda     input
+@single:    lda     INPUT
             cmp     #'d'
             beq     dump                ; dump command?
             bra     invalid             ; invalid command
             
-@double:    lda     input
+@double:    lda     INPUT
             cmp     #'w'
             beq     write               ; write command?
             bra     invalid             ; invalid command
             
-invalid:    ldx     #.HIBYTE(input)
-            lda     #.LOBYTE(input)
+invalid:    ldx     #$00
+            lda     #INPUT
             jsr     cputs               ; print the invalid command
             
             lda     #':'
@@ -204,7 +204,7 @@ help:       ldx     #.HIBYTE(help_msg)
 
 ;= RUN =========================================================================
 
-run:        jsr     PROG_RAM
+run:        jsr     RAM
             jmp     monitor
 
 
@@ -226,16 +226,16 @@ xrecv:      jsr     xmodem
 ; Parameters: none
 ; Returns:    none
 
-memdump:    ldx     #.HIBYTE(input+2)
-            lda     #.LOBYTE(input+2)
+memdump:    ldx     #$00
+            lda     #INPUT+2
             jsr     htou16              ; convert hex string to uint16
-            stx     $07
-            sta     $06                 ; $(06) = start address
+            stx     MEMH
+            sta     MEML                ; $(MEM) = start address
             
             ; take a snapshot of the memory
             ldy     #15                 ; Y = offset
-@buffer:    lda     ($06), Y            ; A = load memory
-            sta     buf, Y              ; store in buffer
+@buffer:    lda     (MEM), Y            ; A = load memory
+            sta     BUF, Y              ; store in buffer
             dey                         ; offset--
             bpl     @buffer             ; offset >= 0?
             
@@ -243,7 +243,7 @@ memdump:    ldx     #.HIBYTE(input+2)
             txa                         ; MSB first
             jsr     u8toh               ; unsigned byte to hex
             jsr     cputs
-            lda     $06                 ; LSB next
+            lda     MEML                ; LSB next
             jsr     u8toh               ; unsigned byte to hex
             jsr     cputs
             
@@ -253,7 +253,7 @@ memdump:    ldx     #.HIBYTE(input+2)
             jsr     putch
             
             ldy     #0                  ; Y = offset
-@bytes:     lda     buf, Y              ; load buffered memory
+@bytes:     lda     BUF, Y              ; load buffered memory
             jsr     u8toh               ; convert byte to hex
             phy                         ; save Y (cputs destroys it)
             jsr     cputs               ; print hex
@@ -269,7 +269,7 @@ memdump:    ldx     #.HIBYTE(input+2)
             jsr     putch
             
             ldy     #0                  ; Y = offset
-@toascii:   lda     buf, Y              ; load buffered memory
+@toascii:   lda     BUF, Y              ; load buffered memory
             cmp     #$20                ; SPACE
             bcc     @notascii           ; value < SPACE?
             cmp     #$7F                ; DEL
@@ -300,22 +300,22 @@ memdump:    ldx     #.HIBYTE(input+2)
 ; Parameters: none
 ; Returns:    none
 
-memwrite:   ldx     #.HIBYTE(input+2)
-            lda     #.LOBYTE(input+2)
+memwrite:   ldx     #$00
+            lda     #INPUT+2
             jsr     htou16              ; convert address hex string to uint16
-            stx     $07
-            sta     $06                 ; ($0006) = address
+            stx     MEMH
+            sta     MEML                ; (DUMP) = address
             
-            ldx     input+7
-            lda     input+8
+            ldx     INPUT+7
+            lda     INPUT+8
             jsr     htou8               ; convert value hex string to uint8
-            sta     ($06)
+            sta     (MEM)
             pha                         ; save write value
             
-            lda     $07                 ; address MSB
+            lda     MEMH                ; address MSB
             jsr     u8toh               ; convert address MSB to hex string
             jsr     cputs               ; print address MSB
-            lda     $06                 ; address LSB
+            lda     MEML                ; address LSB
             jsr     u8toh               ; convert address LSB to hex string
             jsr     cputs               ; print address LSB
             lda     #':'
@@ -345,11 +345,3 @@ help_msg2:  .BYTE "help", TAB, "h", LF
 help_msg3:  .BYTE "run", TAB, "r", LF 
 help_msg4:  .BYTE "write", TAB, "w address byte", LF
 help_msg5:  .BYTE "xmodem", TAB, "x", LF, NUL
-
-
-;= VARIABLES ===================================================================
-
-.BSS
-
-input:      .RES 10                 ; 9 characters plus NUL terminator
-buf:        .RES 16                 ; memory buffer

@@ -46,7 +46,7 @@
 
 .DEFINE     VERSION "0.3.0"
 
-EN = %00000001                          ; EN bit of VGA STATUS register
+VGA_EN = %00000001                      ; EN bit of VGA STATUS register
 
 
 ;= BIOS ENTRY POINT ============================================================
@@ -89,7 +89,7 @@ main:       cli                         ; enable interrupts
             ; VGA initialization
             stz     VGA_STATUS          ; disable VGA and cursor
             jsr     clrscr              ; clear the screen
-            lda     #EN                 ; VGA enabled, cursor disabled
+            lda     #VGA_EN             ; VGA enabled, cursor disabled
             sta     VGA_STATUS          ; write new status register
             
             ; UART initialization
@@ -100,15 +100,15 @@ main:       cli                         ; enable interrupts
             
             ldx     #.HIBYTE(bios_ver)
             lda     #.LOBYTE(bios_ver)
-            jsr     cputs                ; BIOS header
-            
+            jsr     cputs               ; BIOS header
+                        
             ldx     #0
             lda     #1
             jsr     gotoxy              ; move cursor to (0,1)
             
             ldx     #.HIBYTE(copyright)
             lda     #.LOBYTE(copyright)
-            jsr     cputs                ; copyright
+            jsr     cputs               ; copyright
             
             ldx     #0
             lda     #3
@@ -116,26 +116,26 @@ main:       cli                         ; enable interrupts
             
             ldx     #.HIBYTE(ram)
             lda     #.LOBYTE(ram)
-            jsr     cputs                ; RAM message
+            jsr     cputs               ; RAM message
             
             ; compute total RAM installed
             lda     #$02                ; start at $02FF
-            sta     $01                 ; current RAM page
+            sta     R1                  ; current RAM page
             lda     #$FF                ; RAM offset
-            sta     $00                 ; ($0000) = current page to test
+            sta     R0                  ; (R0) = current page to test
             
 @loop:      lda     #$AA
-            sta     ($00)               ; store $AA at ($0000)
-            lda     ($00)               ; read ($0000)
+            sta     (R0)                ; store $AA at (R0)
+            lda     (R0)                ; read (R0)
             cmp     #$AA                ; compare with $AA
-            bne     @total              ; ($0000) != $AA? total
+            bne     @total              ; (R0) != $AA? total
             
-            inc     $01                 ; increment the page to be tested
-            lda     $01                 ; load the page count
-            cmp     #.HIBYTE(VRAM)      ; VRAM starts at RAM end
+            inc     R1                  ; increment the page to be tested
+            lda     R1                  ; load the page count
+            cmp     #.HIBYTE(VRAM_START); VRAM starts at RAM end
             bne     @loop               ; page count != VRAM start? loop
             
-@total:     ldx     $01                 ; convert pages to bytes
+@total:     ldx     R1                  ; convert pages to bytes
             lda     #$00                ; X,A = total bytes
             jsr     u16tod              ; convert RAM total to decimal string
             jsr     cputs               ; print RAM total

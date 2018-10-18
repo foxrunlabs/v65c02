@@ -42,7 +42,7 @@
 
 ;= CONSTANTS ===================================================================
 
-ATTRIB   = (BLACK << 4) | LIGHT_GRAY
+ATTRIB = (BLACK << 4) | LIGHT_GRAY
 
 
 ;= CLEAR LINE --================================================================
@@ -51,7 +51,7 @@ ATTRIB   = (BLACK << 4) | LIGHT_GRAY
 ; Parameters: A = line number
 ; Returns:    none
 ;
-; Destroys: $00, $01
+; Destroys: X, VRAML, VRAMH
 ;
 ; Cycles (jsr->rts): 4549
 
@@ -61,38 +61,38 @@ clrln:      ldx     #0
             jsr     gotoxy              ; set cursor to (0,A)
             
             lda     VGA_CURSH
-            sta     $01
+            sta     VRAML
             lda     VGA_CURSL
-            sta     $00                 ; ($0000) = 11-bit cursor address
+            sta     VRAMH               ; (VRAM) = 11-bit cursor address
             
-            asl     $00                 ; 12-bit VRAM addr = cursor addr << 1
-            rol     $01                 ; A = $0001 << 1
-            lda     $01
-            ora     #.HIBYTE(VRAM)      ; create 16-bit memory address
-            sta     $01                 ; ($00) = 16-bit VRAM address
+            asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
+            rol     VRAMH               ; A = $0001 << 1
+            lda     VRAMH
+            ora     #.HIBYTE(VRAM_START); create 16-bit memory address
+            sta     VRAMH               ; (VRAM) = 16-bit VRAM address
             
             ldx     #80                 ; X = column counter
 @loop:      lda     #NUL                ; A = NUL character
-            sta     ($00)               ; store NUL to VRAM
+            sta     (VRAM)              ; store NUL to VRAM
 
             lda     #$01
             clc
-            adc     $00
-            sta     $00
-            lda     $01
+            adc     VRAML
+            sta     VRAML
+            lda     VRAMH
             adc     #$00
-            sta     $01                 ; ($00) + $0001
+            sta     VRAMH               ; (VRAM) + $0001
 
             lda     #ATTRIB             ; A = attribute
-            sta     ($00)               ; store attribute to VRAM
+            sta     (VRAM)              ; store attribute to VRAM
             
             lda     #$01
             clc
-            adc     $00
-            sta     $00
-            lda     $01
+            adc     VRAML
+            sta     VRAML
+            lda     VRAMH
             adc     #$00
-            sta     $01                 ; ($00) + $0001
+            sta     VRAMH               ; (VRAM) + $0001
             
             dex
             bne     @loop
@@ -106,27 +106,27 @@ clrln:      ldx     #0
 ; Parameters: none
 ; Returns:    none
 ;
-; Destroys: $00, 01
+; Destroys: VRAML, VRAMH
 ;
 ; Cycles (jsr->rts): 110783
 
 .CODE
 
-clrscr:     lda     #.HIBYTE(VRAM)
-            sta     $01
-            lda     #.LOBYTE(VRAM)
-            sta     $00                 ; ($0000) = VRAM address
+clrscr:     lda     #.HIBYTE(VRAM_START)
+            sta     VRAMH
+            lda     #.LOBYTE(VRAM_START)
+            sta     VRAML               ; (VRAM) = VRAM address
             
 @loop:      lda     #NUL                ; A = NUL character
-            sta     ($00)               ; store NUL to VRAM
-            inc     $00                 ; increment VRAM address LSB
+            sta     (VRAM)              ; store NUL to VRAM
+            inc     VRAML               ; increment VRAM address LSB
             lda     #ATTRIB             ; A = attribute
-            sta     ($00)               ; store attribute to VRAM
-            inc     $00                 ; increment VRAM address LSB
+            sta     (VRAM)              ; store attribute to VRAM
+            inc     VRAML               ; increment VRAM address LSB
             bne     @loop               ; $0000 > 0? loop
             
-            inc     $01                 ; increment VRAM address MSB
-            lda     $01                 ; A = VRAM address MSB
+            inc     VRAMH               ; increment VRAM address MSB
+            lda     VRAMH               ; A = VRAM address MSB
             cmp     #.HIBYTE(VRAM_END)  ; compare VRAM addr w/ VRAM end (MSBs)
             bne     @loop               ; VRAM address MSB < end? loop
             
@@ -146,19 +146,19 @@ clrscr:     lda     #.HIBYTE(VRAM)
 ;             A = &string<7:0>
 ; Returns:    none
 ;
-; Destroys: Y, $02, $03
+; Destroys: Y, STRL, STRH
 ;
 ; Cycles (jsr->rts): 48 - [205 * strlen + 8]
 
 .CODE
 
-cputs:      stx     $05
-            sta     $04                 ; ($0004) = string address
+cputs:      stx     STRH
+            sta     STRL                ; (STR) = string address
             
             cursor_off                  ; turn cursor off
             
             ldy     #0                  ; Y = string index
-@loop:      lda     ($04), Y            ; A = string character
+@loop:      lda     (STR), Y            ; A = string character
             beq     @done               ; character == NUL? done
             
             jsr     putch
@@ -177,7 +177,7 @@ cputs:      stx     $05
 ;             A = row
 ; Returns:    none
 ;
-; Destroys: $00, $01, $02
+; Destroys: CURSL, CURSH, CURST
 ;
 ; Cycles (jsr->rts): 102
 
@@ -191,37 +191,37 @@ gotoxy:     cpx     #80
             stx     COL
             sta     ROW                 ; update stored cursor coordinates
             
-            stx     $00
-            stz     $01                 ; $0000 = column (16-bit)
-            stz     $02                 ; $0002,A = row (16-bit)
+            stx     CURSL
+            stz     CURSH               ; CURS = column (16-bit)
+            stz     CURST               ; CURST,A = row (16-bit)
             
             asl     A
             asl     A
             asl     A
             asl     A                   ; don't have to carry until 4th shift
-            rol     $02                 ; $0002,A = row << 4
+            rol     CURST               ; CURST,A = row << 4
             pha                         ; push A
             
-            adc     $00                 ; carry already cleared
-            sta     $00
-            lda     $01
-            adc     $02
-            sta     $01                 ; $0000 = column + (row << 4)
+            adc     CURSL               ; carry already cleared
+            sta     CURSL
+            lda     CURSH
+            adc     CURST
+            sta     CURSH               ; CURS = column + (row << 4)
             
-            pla                         ; $0002,A = row << 4
+            pla                         ; CURST,A = row << 4
             asl     A
-            rol     $02
+            rol     CURST
             asl     A
-            rol     $02                 ; $0002,A = row << 6
+            rol     CURST               ; CURST,A = row << 6
             
             ; VGA cursor address = column + (row << 4) + (row << 6)
             ; $0000 = column + (row << 4)
             ; $0002,A = row << 6
             clc
-            adc     $00
+            adc     CURSL
             sta     VGA_CURSL
-            lda     $01
-            adc     $02
+            lda     CURSH
+            adc     CURST
             sta     VGA_CURSH
             
 @done:      rts
@@ -233,7 +233,7 @@ gotoxy:     cpx     #80
 ; Parameters: A = character
 ; Returns:    none
 ;
-; Destroys: X, $00, $01
+; Destroys: X, VRAML, VRAMH, CTAB
 ;
 ; Cycles (jsr->rts): 63-193
 
@@ -242,15 +242,15 @@ gotoxy:     cpx     #80
 putch:      pha                         ; push character to the stack
             
             lda     VGA_CURSH
-            sta     $01
+            sta     VRAMH
             lda     VGA_CURSL
-            sta     $00                 ; ($0000) = 11-bit cursor address
+            sta     VRAML               ; (VRAM) = 11-bit cursor address
             
-            asl     $00                 ; 12-bit VRAM addr = cursor addr << 1
-            rol     $01                 ; A = $0001 << 1
-            lda     $01
-            ora     #.HIBYTE(VRAM)      ; create 16-bit memory address
-            sta     $01                 ; ($00) = 16-bit VRAM address
+            asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
+            rol     VRAMH               ; A = $0001 << 1
+            lda     VRAMH
+            ora     #.HIBYTE(VRAM_START); create 16-bit memory address
+            sta     VRAMH               ; (VRAM) = 16-bit VRAM address
             
             pla                         ; pull character from the stack
             cmp     #LF
@@ -258,7 +258,7 @@ putch:      pha                         ; push character to the stack
             cmp     #TAB
             beq     @tab                ; character == TAB? tab
             
-@printable: sta     ($00)               ; write the character to VRAM
+@printable: sta     (VRAM)              ; write the character to VRAM
             
             ldx     COL                 ; X = current column
             cpx     #79
@@ -273,10 +273,10 @@ putch:      pha                         ; push character to the stack
             bcs     @newline            ; column >= 72
             
             and     #%00000111          ; A = column % 8
-            sta     $00                 ; save value into $0000
+            sta     COL8                ; save value into COL8
             lda     #8
             sec
-            sbc     $00                 ; A = 8 - (column % 8)
+            sbc     COL8                ; A = 8 - (column % 8)
             clc
             adc     COL                 ; add to column
             tax                         ; X = column

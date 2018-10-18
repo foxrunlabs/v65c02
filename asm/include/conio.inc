@@ -28,7 +28,7 @@
 
 ;= CONSTANTS ===================================================================
 
-CURS = %00000010                        ; CURS bit mask for VGA STATUS register
+VGA_CURS = %00000010                    ; CURS bit mask for VGA STATUS register
 
 
 ;= DISABLE CURSOR ==============================================================
@@ -42,7 +42,7 @@ CURS = %00000010                        ; CURS bit mask for VGA STATUS register
 ; Cycles: 10
 
 .macro cursor_off
-            lda     #.LOBYTE(~CURS)     ; CURS bit mask off
+            lda     #.LOBYTE(~VGA_CURS) ; CURS bit mask off
             and     VGA_STATUS          ; reset CURS bit
             sta     VGA_STATUS          ; write the new VGA STATUS register
 .endmacro
@@ -59,7 +59,7 @@ CURS = %00000010                        ; CURS bit mask for VGA STATUS register
 ; Cycles: 10
 
 .macro cursor_on
-            lda     #CURS               ; CURS bit mask on
+            lda     #VGA_CURS           ; CURS bit mask on
             ora     VGA_STATUS          ; set CURS bit
             sta     VGA_STATUS          ; write the new VGA STATUS register
 .endmacro

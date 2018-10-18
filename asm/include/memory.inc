@@ -30,10 +30,9 @@
 
 ZP           = $0000
 STACK        = $0100
-BIOS_RAM     = $0200
-PROG_RAM     = $0300
-VRAM         = $8000
-VRAM_END     = $8000 + $1000
+RAM          = $0200
+VRAM_START   = $8000
+VRAM_END     = VRAM_START + $1000
 VGA_STATUS   = $9000
 VGA_CURSL    = $9001
 VGA_CURSH    = $9002
@@ -68,5 +67,61 @@ BIOS_ROM     = $C000
 
 ;= ZERO PAGE ADDRESSES =========================================================
 
-COL = $F0
-ROW = $F1
+; General registers
+R0 = $00
+R1 = $01
+R2 = $02
+R3 = $03
+R4 = $04
+R5 = $05
+R6 = $06
+R7 = $07
+R8 = $08
+R9 = $09
+RA = $0A
+RB = $0B
+RC = $0C
+RD = $0D
+RE = $0E
+RF = $0F
+
+; Console routines
+COL   = $10
+ROW   = $11
+ATTR  = $12
+VRAM  = $13
+VRAML = $13
+VRAMH = $14
+STR   = $15
+STRL  = $15
+STRH  = $16
+COL8  = $17
+CURS  = $18
+CURSL = $18
+CURSH = $19
+CURST = $1A
+
+; XMODEM receiver
+BLOCK  = $1B
+CHKSUM = $1C
+DATA   = $1D
+DATAL  = $1D
+DATAH  = $1E
+ERROR  = $1F
+
+; Conversion routines
+BYTE  = $20
+WORD  = $21
+WORDL = $21
+WORDH = $22
+HSTR  = $23
+HSTRL = $23
+HSTRH = $24
+DSTR  = $25
+
+; Monitor
+INPUT = $2B
+MEM   = $35
+MEML  = $35
+MEMH  = $36
+BUF   = $37

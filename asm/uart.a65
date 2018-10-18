@@ -84,18 +84,18 @@ uart_putc:  pha                     ; save character
 ;             A = &string<7:0>
 ; Returns:    none
 ;
-; Destroys:   Y, $00, $01
+; Destroys:   Y, STRL, STRH
 ;
 ; Cycles (jsr->rts): 29 + (31 * string length) [doesn't factor polling time]
 
 .CODE
 
-uart_puts:  stx     $01
-            sta     $00             ; ($00) = string address
+uart_puts:  stx     STRH
+            sta     STRL            ; (STR) = string address
             
             ldy     #0              ; Y = character counter
             
-@loop:      lda     ($00), Y        ; A = string character
+@loop:      lda     (STR), Y        ; A = string character
             beq     @done           ; character = NUL?
             
             pha                     ; save character
