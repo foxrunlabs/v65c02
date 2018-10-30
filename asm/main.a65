@@ -29,6 +29,7 @@
 .PC02
 
 .INCLUDE    "conio.inc"
+.INCLUDE    "keyboard.inc"
 .INCLUDE    "memory.inc"
 .INCLUDE    "uart.inc"
 
@@ -164,9 +165,7 @@ main:       cli                         ; enable interrupts
             lda     #7
             jsr     gotoxy              ; move cursor to (0,7)
             
-            lda     KBD_SCANCODE        ; clear the keyboard buffer            
-            
-            jmp     monitor             ; ROM monitor program
+@done:      jmp     monitor             ; ROM monitor program
 
 
 ;= READ ONLY DATA ==============================================================

@@ -30,6 +30,7 @@
 
 .INCLUDE    "ascii.inc"
 .INCLUDE    "conio.inc"
+.INCLUDE    "keyboard.inc"
 .INCLUDE    "memory.inc"
 
 .IMPORT     clrln
@@ -59,13 +60,13 @@ monitor:    cursor_on                   ; turn cursor on
             
             ldx     #0                  ; X = string index
 @getline:   lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #%00000001          ; test DATA_RDY
+            bit     #DATA_RDY           ; test DATA_RDY
             beq     @getline            ; DATA_RDY == 0? keep polling
             
             lda     KBD_SCANCODE        ; read the scan code
             tay
             lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #%00000110          ; test LSHIFT and RSHIFT
+            bit     #(LSHIFT | RSHIFT)  ; test LSHIFT and RSHIFT
             bne     @shifted
             lda     keymap, Y           ; convert to ASCII
             bra     @isnull
