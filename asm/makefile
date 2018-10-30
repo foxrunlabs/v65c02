@@ -15,7 +15,7 @@ ASFLAGS  = --cpu 65C02 -l $(basename $@).lst -t none -I ./include/
 
 LD       = ld65
 LDCONFIG = memory.conf
-LDFLAGS  = -C $(LDCONFIG) -m $(basename $@).map
+LDFLAGS  = -C $(LDCONFIG) -m $(basename $@).map -o $(BIOS)
 
 BIN2COE  = ./bin2coe.sh
 BIN2MEM  = ./bin2mem.sh
