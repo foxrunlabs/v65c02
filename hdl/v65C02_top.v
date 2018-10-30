@@ -58,8 +58,8 @@ module v65C02_Top
     output wire       UART_RXD_OUT,     // output to serial port
     
     // PS/2 keyboard
-    input wire        PS2_CLK,          // PS/2 clock
-    input wire        PS2_DATA          // PS/2 serial data
+    inout wire        PS2_CLK,          // PS/2 clock
+    inout wire        PS2_DATA          // PS/2 serial data
     );
     
     
@@ -256,12 +256,12 @@ module v65C02_Top
     
     KeyboardController KeyboardController
         (
-        .clk_i    (clk_cpu),
-        .en_i     (kbd_en),
-        .addr_i   (cpu_addr[7:0]),
-        .dout_o   (kbd_dout),
-        .ps2_clk_i(PS2_CLK),
-        .ps2_din_i(PS2_DATA)
+        .clk_i      (clk_cpu),
+        .en_i       (kbd_en),
+        .addr_i     (cpu_addr[7:0]),
+        .dout_o     (kbd_dout),
+        .ps2_clk_io (PS2_CLK),
+        .ps2_data_io(PS2_DATA)
         );
     
     
