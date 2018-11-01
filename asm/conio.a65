@@ -61,9 +61,9 @@ clrln:      ldx     #0
             jsr     gotoxy              ; set cursor to (0,A)
             
             lda     VGA_CURSH
-            sta     VRAML
+            sta     VRAMH
             lda     VGA_CURSL
-            sta     VRAMH               ; (VRAM) = 11-bit cursor address
+            sta     VRAML               ; (VRAM) = 11-bit cursor address
             
             asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
             rol     VRAMH               ; A = $0001 << 1
