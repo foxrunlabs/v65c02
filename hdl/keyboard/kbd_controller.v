@@ -33,68 +33,26 @@ module KeyboardController
     input  wire       clk_i,        // CPU clock
     
     input  wire       en_i,         // controller bus select
+    input  wire       we_i,         // write enable
     
     input  wire [7:0] addr_i,       // 8-bit register address
+    input  wire [7:0] din_i,        // 8-bit register data input
     output wire [7:0] dout_o,       // 8-bit register data output
     
-    inout  wire       ps2_clk_io,   // PS/2 clock input
-    inout  wire       ps2_data_io   // PS/2 data input
+    inout  wire       ps2_clk_io,   // PS/2 clock
+    inout  wire       ps2_data_io   // PS/2 serial data
     );
-    
-    
-/* TRI-STATE BUFFER ***********************************************************/
-    
-    wire ps2_clkout_en;                 // PS/2 clock output tri-state enable
-    wire ps2_dout_en;                   // PS/2 data output tri-state enable
-    
-    wire ps2_clkout;                    // PS/2 clock output
-    wire ps2_dout;                      // PS/2 data output
-    
-    wire ps2_clkin;                     // PS/2 clock input
-    wire ps2_din;                       // PS/2 data input
-    
-    assign ps2_clkout_en = 1'b0;        // disable PS/2 clock output
-    assign ps2_dout_en = 1'b0;          // disable PS/2 data output
-    
-    assign ps2_clk_io  = (ps2_clkout_en) ? ps2_clkout : 1'bz;
-    assign ps2_data_io = (ps2_dout_en) ? ps2_dout : 1'bz;
-    
-    assign ps2_clkin = ps2_clk_io;
-    assign ps2_din   = ps2_data_io;
-    
-    
-/* INPUT SYNCHRONIZER *********************************************************/
-    
-    reg ps2_clkin_async_ff;             // PS/2 clock input synchronizer
-    reg ps2_clkin_sync_ff;              // PS/2 clock input synchronizer
-    
-    reg ps2_din_async_ff;               // PS/2 data synchronizer
-    reg ps2_din_sync_ff;                // PS/2 data synchronizer
-    
-    // PS/2 clock synchronizer
-    initial ps2_clkin_async_ff = 1'b1;
-    initial ps2_clkin_sync_ff  = 1'b1;
-    always @(posedge clk_i) begin
-        ps2_clkin_async_ff <= #1 ps2_clkin;
-        ps2_clkin_sync_ff  <= #1 ps2_clkin_async_ff;
-    end
-    
-    // PS/2 data synchronizer
-    initial ps2_din_async_ff = 1'b1;
-    initial ps2_din_sync_ff  = 1'b1;
-    always @(posedge clk_i) begin
-        ps2_din_async_ff <= #1 ps2_din;
-        ps2_din_sync_ff  <= #1 ps2_din_async_ff;
-    end
     
     
 /* CONTROLLER REGISTERS *******************************************************/
     
     localparam STATUS   = 8'h00,
-               SCANCODE = 8'h01;
+               SCANCODE = 8'h01,
+               TXREG    = 8'h02;
     
     reg  [7:0] dout_reg;                // register data output
     
+    // read logic
     initial dout_reg = 8'h00;
     always @(posedge clk_i)
         if(en_i)
@@ -156,18 +114,21 @@ module KeyboardController
         scan_code_reg <= #1 scan_code_ns;
     
     
-/* RECEIVER *******************************************************************/
+/* TRANSCEIVER ****************************************************************/
     
     wire       rx_stb;                  // new scan code flag
     wire [7:0] rx_scan_code;            // received keyboard scan code
     
-    PS2_RX PS2_RX
+    PS2Transceiver PS2Transceiver
         (
         .clk_i      (clk_i),
-        .ps2_clk_i  (ps2_clkin_sync_ff),
-        .ps2_din_i  (ps2_din_sync_ff),
+        .ps2_clk_io (ps2_clk_io),
+        .ps2_data_io(ps2_data_io),
+        .busy_o     (),
+        .we_i       (1'b0),
+        .din_i      (8'h00),
         .rx_stb_o   (rx_stb),
-        .scan_code_o(rx_scan_code)
+        .dout_o     (rx_scan_code)
         );
     
     
