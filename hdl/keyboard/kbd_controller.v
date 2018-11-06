@@ -116,19 +116,26 @@ module KeyboardController
     
 /* TRANSCEIVER ****************************************************************/
     
+    wire       tcvr_busy;
+    wire       tx_stb;
+    wire       tx_err_stb;
     wire       rx_stb;                  // new scan code flag
     wire [7:0] rx_scan_code;            // received keyboard scan code
+    wire       rx_err_stb;
     
     PS2Transceiver PS2Transceiver
         (
-        .clk_i      (clk_i),
-        .ps2_clk_io (ps2_clk_io),
-        .ps2_data_io(ps2_data_io),
-        .busy_o     (),
-        .we_i       (1'b0),
-        .din_i      (8'h00),
-        .rx_stb_o   (rx_stb),
-        .dout_o     (rx_scan_code)
+        .clk_i       (clk_i),
+        .ps2_clk_io  (ps2_clk_io),
+        .ps2_data_io (ps2_data_io),
+        .busy_o      (tcvr_busy),
+        .we_i        (1'b0),
+        .din_i       (8'h00),
+        .tx_stb_o    (tx_stb),
+        .tx_err_stb_o(tx_err_stb),
+        .rx_stb_o    (rx_stb),
+        .dout_o      (rx_scan_code),
+        .rx_err_stb_o(rx_err_stb)
         );
     
     

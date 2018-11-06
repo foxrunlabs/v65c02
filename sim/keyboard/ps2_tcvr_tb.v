@@ -38,30 +38,33 @@ module PS2Transceiver_tb;
     reg [7:0] din_i;
     
     
-/* BI-DIRECTIONAL *************************************************************/
-    
-    wire ps2_clk_io;
-    wire ps2_data_io;
-    
-    
 /* OUTPUTS ********************************************************************/
     
     wire       busy_o;
+    wire       tx_stb_o;
+    wire       tx_err_stb_o;
     wire       rx_stb_o;
     wire [7:0] dout_o;
+    wire       rx_err_stb_o;
     
     
-/* OPEN DRAIN LOGIC ***********************************************************/
+/* BI-DIRECTIONAL *************************************************************/
     
-    reg ps2_clk;                    // PS/2 clock from device
-    reg ps2_data;                   // PS/2 data from device
+    // PS/2 open-drain bus signals
+    wire ps2_clk_bus;
+    wire ps2_data_bus;
     
-    // pull-ups for PS/2 bus
-    pullup(ps2_clk_io);
-    pullup(ps2_data_io);
+    pullup(ps2_clk_bus);
+    pullup(ps2_data_bus);
     
-    assign ps2_clk_io = ps2_clk;
-    assign ps2_data_io = ps2_data;
+    assign ps2_clk_bus  = (device_clk)  ? 1'bZ : 1'b0;
+    assign ps2_data_bus = (device_data) ? 1'bZ : 1'b0;
+    
+    
+/* PS/2 DEVICE SIGNALS ********************************************************/
+    
+    reg device_clk;                     // PS/2 clock from device
+    reg device_data;                    // PS/2 data from device
     
     
 /* MODULES ********************************************************************/
@@ -69,14 +72,17 @@ module PS2Transceiver_tb;
     // unit under test
     PS2Transceiver PS2Transceiver_uut
         (
-        .clk_i      (clk_i),
-        .ps2_clk_io (ps2_clk_io),
-        .ps2_data_io(ps2_data_io),
-        .busy_o     (busy_o),
-        .we_i       (we_i),
-        .din_i      (din_i),
-        .rx_stb_o   (rx_stb_o),
-        .dout_o     (dout_o)
+        .clk_i       (clk_i),
+        .ps2_clk_io  (ps2_clk_bus),
+        .ps2_data_io (ps2_data_bus),
+        .busy_o      (busy_o),
+        .we_i        (we_i),
+        .din_i       (din_i),
+        .tx_stb_o    (tx_stb_o),
+        .tx_err_stb_o(tx_err_stb_o),
+        .rx_stb_o    (rx_stb_o),
+        .dout_o      (dout_o),
+        .rx_err_stb_o(rx_err_stb_o)
         );
     
     
@@ -101,25 +107,42 @@ module PS2Transceiver_tb;
     localparam KEY_U = 8'h3C;
     localparam KEY_Q = 8'h15;
     
-    initial begin
-        ps2_clk  = 1'bZ;
-        ps2_data = 1'bZ;
-        we_i     = 1'b0;
-        din_i    = 8'h00;
-        
+    initial begin        
+        we_i  = 1'b0;
+        din_i = 8'h00;
+                
+        // simulate device-to-host communication
         $write("Pressing U... ");
         #1;
-        ps2_kbd(KEY_U);
+        ps2_dev2host(KEY_U);
         @(posedge clk_i);
+        
+        #100000;    // 100 us delay
         
         $write("Pressing Q... ");
         #1;
-        ps2_kbd(KEY_Q);
+        ps2_dev2host(KEY_Q);
         @(posedge clk_i);
+        
+        #100000;    // 100 us delay
+        
+        // simulate host-to-device communication
+        #1;
+        we_i  = 1'b1;
+        din_i = KEY_U;
+        @(posedge clk_i);
+        
+        #1;
+        we_i  = 1'b0;
+        din_i = 8'h00;
+        @(posedge clk_i);
+        
+        ps2_host2dev();
         
         // done
         @(posedge clk_i) $stop;
     end
+    
     
     // display scan code when received
     always @(posedge clk_i)
@@ -133,8 +156,16 @@ module PS2Transceiver_tb;
     localparam B_START = 1'b0;
     localparam B_STOP  = 1'b1;
     
-    // Simulate pressing a key
-    task ps2_kbd;
+    
+    // initial state
+    initial begin
+        device_clk  = 1'b1;
+        device_data = 1'b1;
+    end
+    
+    
+    // simulate device-to-host communication
+    task ps2_dev2host;
         input [7:0] key;
         
         integer        i;
@@ -143,20 +174,58 @@ module PS2Transceiver_tb;
         
         begin            
             parity = ~(^ key);
-            frame = {B_STOP, parity, key, B_START};
+            frame  = {B_STOP, parity, key, B_START};
             
             // 10 kHz PS/2 clock
             for(i = 0; i < 11; i = i + 1) begin
-                ps2_data = (frame[i]) ? 1'bZ : 1'b0;
+                device_data = frame[i];
             
                 // 50 us half-period
-                #(50000);
-                ps2_clk = 1'b0;
+                #50000;
+                device_clk = 1'b0;
             
                 // 50 us half-period
-                #(50000);
-                ps2_clk = 1'bZ;
+                #50000;
+                device_clk = 1'b1;
             end
+        end    
+    endtask
+    
+    
+    // simulate host-to-device communication
+    task ps2_host2dev;
+        integer        i;
+        reg     [10:0] data;
+        reg            parity;
+        begin
+            data = {11{1'b1}};
+            
+            @(posedge ps2_clk_bus);
+            
+            // 10kHz PS/2 clock
+            for(i = 0; i < 10; i = i + 1)
+                begin                    
+                    // 50 us half-period
+                    #50000;
+                    device_clk = 1'b0;
+                    
+                    // 50 us half-period
+                    #50000;
+                    device_clk = 1'b1;
+                    data       = {ps2_data_bus, data[10:1]};
+                end
+            
+            #25000;
+            parity      = ~(^ data[8:1]);
+            device_data = ~(parity == data[9]);
+            device_data = 1'b1;
+            
+            #25000;
+            device_clk = 1'b0;
+            
+            #50000;
+            device_clk  = 1'b1;
+            device_data = 1'b1;
         end    
     endtask
     

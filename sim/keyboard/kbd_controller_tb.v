@@ -36,8 +36,6 @@ module KeyboardController_tb;
     reg       clk_i;
     reg       en_i;
     reg [7:0] addr_i;
-    reg       ps2_clk_i;
-    reg       ps2_din_i;
     
     
 /* OUTPUTS  *******************************************************************/
@@ -45,24 +43,43 @@ module KeyboardController_tb;
     wire [7:0] dout_o;
     
     
+/* BI-DIRECTIONAL *************************************************************/
+    
+    // PS/2 open-drain bus signals
+    wire ps2_clk_bus;
+    wire ps2_data_bus;
+    
+    pullup(ps2_clk_bus);
+    pullup(ps2_data_bus);
+    
+    assign ps2_clk_bus  = (device_clk)  ? 1'bZ : 1'b0;
+    assign ps2_data_bus = (device_data) ? 1'bZ : 1'b0;
+    
+    
+/* PS/2 DEVICE SIGNALS ********************************************************/
+    
+    reg device_clk;                     // PS/2 clock from device
+    reg device_data;                    // PS/2 data from device
+    
+    
 /* MODULES ********************************************************************/
     
     // unit under test
     KeyboardController KeyboardController_uut
         (
-        .clk_i    (clk_i),
-        .en_i     (en_i),
-        .addr_i   (addr_i),
-        .dout_o   (dout_o),
-        .ps2_clk_i(ps2_clk_i),
-        .ps2_din_i(ps2_din_i)
+        .clk_i      (clk_i),
+        .en_i       (en_i),
+        .addr_i     (addr_i),
+        .dout_o     (dout_o),
+        .ps2_clk_io (ps2_clk_bus),
+        .ps2_data_io(ps2_data_bus)
         );
     
     
 /* CLOCKS *********************************************************************/
     
     // clock period (ns)
-    localparam T_clk = 10;
+    localparam T_clk = 20;
     
     // system clock
     always begin
@@ -87,16 +104,17 @@ module KeyboardController_tb;
                SCANCODE = 8'h01;
     
     initial begin
-        en_i      = 1'b0;
-        addr_i    = 8'h00;
-        ps2_clk_i = 1'b1;
-        ps2_din_i = 1'b1;
+        en_i   = 1'b0;
+        addr_i = 8'h00;
         
         // press and release "a"
         #1;
         press_key(KEY_A);
+        #100000;
         press_key(BREAK);
+        #100000;
         press_key(KEY_A);
+        #100000;
         @(posedge clk_i);
         
         // read the STATUS register and wait until there is a scan code avail.
@@ -125,11 +143,17 @@ module KeyboardController_tb;
         // press and release shift + "b"
         #1;
         press_key(L_SHIFT);
+        #100000;
         press_key(KEY_B);
+        #100000;
         press_key(BREAK);
+        #100000;
         press_key(KEY_B);
+        #100000;
         press_key(BREAK);
+        #100000;
         press_key(L_SHIFT);
+        #100000;
         @(posedge clk_i);
         
         // done
@@ -137,34 +161,44 @@ module KeyboardController_tb;
     end
     
     
-/* TASKS **********************************************************************/
+/* PS/2 KEYBOARD SIMULATOR ****************************************************/
     
     // PS/2 protocol bits
-    localparam PS2_START_BIT = 1'b0;
-    localparam PS2_STOP_BIT  = 1'b1;
+    localparam B_START = 1'b0;
+    localparam B_STOP  = 1'b1;
     
-    // Simulate pressing a key
+    
+    // initial state
+    initial begin
+        device_clk  = 1'b1;
+        device_data = 1'b1;
+    end
+    
+    
+    // simulate device-to-host communication
     task press_key;
-        input    [7:0] scan_code;
-        reg     [10:0] data;
-        reg            odd_parity;
+        input [7:0] key;
+        
         integer        i;
-        begin
-            odd_parity = ~(^scan_code);     // set if even number of ones
-            data       = {PS2_STOP_BIT, odd_parity, scan_code, PS2_START_BIT};
+        reg            parity;
+        reg     [10:0] frame;
+        
+        begin            
+            parity = ~(^ key);
+            frame  = {B_STOP, parity, key, B_START};
             
-            for(i = 0; i < 11; i = i + 1)
-                begin
-                    ps2_din_i = data[i];
-                    
-                    // 50 us half-period
-                    #(50000);
-                    ps2_clk_i = 0;
-                    
-                    // 50 us half-period
-                    #(50000);
-                    ps2_clk_i = 1;
-                end
+            // 10 kHz PS/2 clock
+            for(i = 0; i < 11; i = i + 1) begin
+                device_data = frame[i];
+            
+                // 50 us half-period
+                #50000;
+                device_clk = 1'b0;
+            
+                // 50 us half-period
+                #50000;
+                device_clk = 1'b1;
+            end
         end    
     endtask
     
