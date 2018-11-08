@@ -63,10 +63,10 @@ monitor:    cursor_on                   ; turn cursor on
             bit     #DATA_RDY           ; test DATA_RDY
             beq     @getline            ; DATA_RDY == 0? keep polling
             
-            lda     KBD_SCANCODE        ; read the scan code
+            lda     KBD_RXREG           ; read the scan code
             tay
             lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #(LSHIFT | RSHIFT)  ; test LSHIFT and RSHIFT
+            bit     #SHIFT              ; test SHIFT
             bne     @shifted
             lda     keymap, Y           ; convert to ASCII
             bra     @isnull

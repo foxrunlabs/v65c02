@@ -28,8 +28,8 @@
 
 ;= REGISTER BITS ===============================================================
 
-DATA_RDY = %00000001                    ; data ready status bit
-LSHIFT   = %00000010                    ; left shift status bit
-RSHIFT   = %00000100                    ; right shift status bit
-CTRL     = %00001000                    ; control status bit
-ALT      = %00010000                    ; alt status bit
+DATA_RDY  = %00000001                   ; data ready status bit
+SHIFT     = %00000010                   ; shift key status bit
+CTRL      = %00000100                   ; control key status bit
+ALT       = %00001000                   ; alt key status bit
+TCVR_BUSY = %00010000                   ; transceiver busy status bit

@@ -149,8 +149,7 @@ module PS2Transceiver
                     state_ns = S_DONE;
             
             S_DONE:
-                if(idle_bus)
-                    state_ns = S_IDLE;
+                state_ns = S_IDLE;
             
             default:
                 state_ns = S_IDLE;

@@ -35,7 +35,9 @@ module KeyboardController_tb;
     
     reg       clk_i;
     reg       en_i;
+    reg       we_i;
     reg [7:0] addr_i;
+    reg [7:0] din_i;
     
     
 /* OUTPUTS  *******************************************************************/
@@ -69,7 +71,9 @@ module KeyboardController_tb;
         (
         .clk_i      (clk_i),
         .en_i       (en_i),
+        .we_i       (we_i),
         .addr_i     (addr_i),
+        .din_i      (din_i),
         .dout_o     (dout_o),
         .ps2_clk_io (ps2_clk_bus),
         .ps2_data_io(ps2_data_bus)
@@ -94,27 +98,32 @@ module KeyboardController_tb;
 /* MAIN ***********************************************************************/
     
     // scan codes
-    localparam KEY_A   = 8'h1c;
-    localparam KEY_B   = 8'h32;
-    localparam L_SHIFT = 8'h12;
-    localparam BREAK   = 8'hf0;
+    localparam KEY_A   = 8'h1c,
+               KEY_B   = 8'h32,
+               L_SHIFT = 8'h12,
+               BREAK   = 8'hf0;
     
     // controller registers
-    localparam STATUS   = 8'h00,
-               SCANCODE = 8'h01;
+    localparam STATUS = 8'h00,
+               RXREG  = 8'h01,
+               TXREG  = 8'h02;
     
     initial begin
         en_i   = 1'b0;
+        we_i   = 1'b0;
         addr_i = 8'h00;
+        din_i  = 8'h00;
         
         // press and release "a"
         #1;
         press_key(KEY_A);
-        #100000;
+        @(posedge clk_i);
+        
+        #100000;    // 100 us delay
+        
+        #1;
         press_key(BREAK);
-        #100000;
         press_key(KEY_A);
-        #100000;
         @(posedge clk_i);
         
         // read the STATUS register and wait until there is a scan code avail.
@@ -126,35 +135,68 @@ module KeyboardController_tb;
         while(~dout_o[0])
             @(posedge clk_i);
         
-        // read the scan code
+        while(dout_o[4])
+            @(posedge clk_i);
+        
+        // read RXREG
         #1;
-        en_i = 1'b1;
-        addr_i = SCANCODE;
+        en_i   = 1'b1;
+        addr_i = RXREG;
+        @(posedge clk_i);
+        
+        #1;
+        en_i   = 1'b0;
         @(posedge clk_i);
         
         // display the scan code
         @(posedge clk_i);
         $display("Scan code: %h", dout_o);
         
-        #1;
-        en_i = 1'b0;
-        @(posedge clk_i);
+        #100000;
         
         // press and release shift + "b"
         #1;
         press_key(L_SHIFT);
         #100000;
         press_key(KEY_B);
+        @(posedge clk_i);
+        
+        #1;
+        en_i   = 1'b1;
+        addr_i = STATUS;
+        @(posedge clk_i);
+        
+        while(dout_o[4])
+            @(posedge clk_i);
+        
+        @(posedge clk_i);
+        $display("STATUS Register: %h", dout_o);
+        
+        #1;
+        en_i   = 1'b0;
+        @(posedge clk_i);
+        
         #100000;
+        
+        #1;
         press_key(BREAK);
-        #100000;
         press_key(KEY_B);
         #100000;
         press_key(BREAK);
-        #100000;
         press_key(L_SHIFT);
-        #100000;
         @(posedge clk_i);
+        
+        #1;
+        en_i   = 1'b1;
+        addr_i = STATUS;
+        @(posedge clk_i);
+        
+        #1;
+        en_i   = 1'b0;
+        @(posedge clk_i);
+        
+        @(posedge clk_i);
+        $display("STATUS Register: %h", dout_o);
         
         // done
         @(posedge clk_i) $stop;

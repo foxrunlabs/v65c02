@@ -99,7 +99,83 @@ main:       cli                         ; enable interrupts
             lda     #.LOBYTE(B115200)
             sta     UART_BRGL           ; Initialize UART to 115200 baud
             
-            ldx     #.HIBYTE(bios_ver)
+            ; wait for TCVR_BUSY flag to clear
+@busy0:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #TCVR_BUSY          ; test TCVR_BUSY
+            bne     @busy0              ; TCVR_BUSY == 1? keep polling
+            
+            lda     #$ED                ; keyboard LEDs command
+            sta     KBD_TXREG           ; send to keyboard
+            
+@poll0:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #DATA_RDY           ; test DATA_RDY
+            beq     @poll0              ; DATA_RDY == 0? keep polling
+            
+            lda     KBD_RXREG           ; read keyboard RXREG
+            cmp     #$FA                ; ACK byte
+            bne     @screen             ; RXREG != ACK? skip everything else
+            
+            ; poll for busy flag
+@busy1:     lda     KBD_STATUS
+            bit     #TCVR_BUSY
+            bne     @busy1
+            
+            lda     #$07                ; turn all LEDs on
+            sta     KBD_TXREG           ; send to keyboard
+            
+@poll1:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #DATA_RDY           ; test DATA_RDY
+            beq     @poll1              ; DATA_RDY == 0? keep polling
+            
+            lda     KBD_RXREG
+            cmp     #$FA
+            bne     @screen
+            
+            ; 1 second delay
+            lda     #$80
+            sta     TMR_TIMER08
+            lda     #$F0
+            sta     TMR_TIMER16
+            lda     #$FA
+            sta     TMR_TIMER24
+            lda     #$02
+            sta     TMR_TIMER32
+            
+@delay0:    lda     TMR_STATUS
+            bit     #%00000001          ; test OVRFL flag
+            beq     @delay0             ; OVRFL == 1? keep polling
+            
+            ; poll for busy flag
+@busy2:     lda     KBD_STATUS
+            bit     #TCVR_BUSY
+            bne     @busy2
+            
+            lda     #$ED                ; keyboard LEDs command
+            sta     KBD_TXREG           ; send to keyboard
+            
+@poll2:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #DATA_RDY           ; test DATA_RDY
+            beq     @poll2              ; DATA_RDY == 0? keep polling
+            
+            lda     KBD_RXREG
+            cmp     #$FA
+            bne     @screen             ; RXREG != ACK? skip
+            
+            ; poll for busy flag
+@busy3:     lda     KBD_STATUS
+            bit     #TCVR_BUSY
+            bne     @busy3
+            
+            lda     #$00                ; turn LEDs off
+            sta     KBD_TXREG
+            
+@poll3:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #DATA_RDY           ; test DATA_RDY
+            beq     @poll3              ; DATA_RDY == 0? keep polling
+            
+            lda     KBD_RXREG           ; clear RXREG
+            
+@screen:    ldx     #.HIBYTE(bios_ver)
             lda     #.LOBYTE(bios_ver)
             jsr     cputs               ; BIOS header
                         
