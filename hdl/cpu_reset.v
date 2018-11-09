@@ -37,34 +37,59 @@ module CPUReset
     (
     input  wire clk_i,              // system clock
     
-    input  wire trigger_i,          // trigger (rising edge sensitive)
-    output wire reset_o             // reset signal
+    input  wire rst_i,              // reset input
+    output wire rst_o               // reset ouput
     );
+    
+    
+/* SYNCHRONIZER ***************************************************************/
+    
+    reg  rst_async_ff;                  // reset synchronizer
+    reg  rst_sync_ff;
+    
+    initial rst_async_ff = 1'b0;
+    initial rst_sync_ff  = 1'b0;
+    always @(posedge clk_i) begin
+        rst_async_ff <= #1 rst_i;
+        rst_sync_ff  <= #1 rst_async_ff;
+    end
+    
+    
+/* DEBOUNCE *******************************************************************/
+    
+    wire rst_db;                        // debounce reset button
+    
+    Debounce Debounce
+        (
+        .clk_i(clk_i),
+        .in_i (rst_sync_ff),
+        .out_o(rst_db)
+        );
     
     
 /* RISING EDGE DETECTOR *******************************************************/
     
-    reg        trigger_prev_ff;     // previous trigger input
-    wire       trigger_edge;        // rising-edge detector
+    reg        rst_prev_ff;         // previous reset input
+    wire       rst_re;              // reset rising-edge
     
-    initial trigger_prev_ff = 1'b0;
+    initial rst_prev_ff = 1'b0;
     always @(posedge clk_i)
-        trigger_prev_ff <= #1 trigger_i;
+        rst_prev_ff <= #1 rst_db;
     
-    assign trigger_edge = ~trigger_prev_ff & trigger_i;
+    assign rst_re = ~rst_prev_ff & rst_db;
     
     
 /* RESET SIGNAL ***************************************************************/
     
-    reg  [2:0] counter_reg;         // clock cycle counter
+    reg  [2:0] count_reg;           // clock cycle counter
     
-    initial counter_reg = 3'd0;
+    initial count_reg = 3'd0;
     always @(posedge clk_i)
-        if(trigger_edge)
-            counter_reg <= #1 3'd0;
-        else if(~counter_reg[2])
-            counter_reg <= #1 counter_reg + 3'd1;
+        if(rst_re)
+            count_reg <= #1 3'd0;
+        else if(~count_reg[2])
+            count_reg <= #1 count_reg + 3'd1;
     
-    assign reset_o = ~counter_reg[2];
+    assign rst_o = ~count_reg[2];
     
 endmodule

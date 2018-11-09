@@ -35,12 +35,12 @@ module CPUReset_tb;
 /* INPUTS *********************************************************************/
     
     reg clk_i;
-    reg trigger_i;
+    reg rst_i;
     
     
 /* OUTPUTS ********************************************************************/
     
-    wire reset_o;
+    wire rst_o;
     
     
 /* MODULES ********************************************************************/
@@ -48,15 +48,15 @@ module CPUReset_tb;
     // unit under test
     CPUReset CPUReset_uut
         (
-        .clk_i    (clk_i),
-        .trigger_i(trigger_i),
-        .reset_o  (reset_o)
+        .clk_i(clk_i),
+        .rst_i(rst_i),
+        .rst_o(rst_o)
         );
     
     
 /* CLOCK **********************************************************************/
     
-    localparam T_clk = 10;      // clock period (ns)
+    localparam T_clk = 20;      // clock period (ns)
     
     always begin
         clk_i = 1'b1;
@@ -70,20 +70,22 @@ module CPUReset_tb;
 /* MAIN ***********************************************************************/
     
     initial begin
-        trigger_i = 1'b0;
+        rst_i = 1'b0;
         
         // wait for the power-up reset to complete
-        @(negedge reset_o);
-        
-        // trigger another reset
-        #1 trigger_i = 1'b1;
+        @(negedge rst_o);
         @(posedge clk_i);
         
-        #1 trigger_i = 1'b0;
-        @(posedge clk_i)
+        // trigger another reset
+        #1
+        rst_i = 1'b1;
+        @(posedge clk_i);
         
-        // wait for the triggered reset to complete
-        @(negedge reset_o);
+        #6000000;
+        
+        #1;
+        rst_i = 1'b0;
+        @(posedge clk_i)
         
         // done
         @(posedge clk_i) $stop;

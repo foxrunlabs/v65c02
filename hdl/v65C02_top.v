@@ -78,23 +78,13 @@ module v65C02_Top
     
 /* CPU RESET BUTTON ***********************************************************/
     
-    reg  rst_async_ff;                  // reset synchronizer
-    reg  rst_sync_ff;
     wire rst_cpu;                       // v65C02 reset signal
-    
-    // reset synchronizer
-    initial rst_async_ff = 1'b0;
-    initial rst_sync_ff  = 1'b0;
-    always @(posedge clk_cpu) begin
-        rst_async_ff <= #1 ~CPU_RESETN;
-        rst_sync_ff  <= #1 rst_async_ff;
-    end
     
     CPUReset CPUReset
         (
-        .clk_i    (clk_cpu),
-        .trigger_i(rst_sync_ff),
-        .reset_o  (rst_cpu)
+        .clk_i(clk_cpu),
+        .rst_i(~CPU_RESETN),
+        .rst_o(rst_cpu)
         );
     
     
