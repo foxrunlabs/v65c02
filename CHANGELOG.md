@@ -5,11 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 ### Added
-- Tri-state PS/2 pins.
+- PS/2 transmitter implemented in PS/2 transceiver module.
 ### Changed
-- Developed a Zero Page memory map, to include the creation of 16 general purpose "registers."
+- Zero Page memory map, including 16 general purpose "registers."
+- XMODEM receiver stores file at $0200
 ### Fixed
 - Pull-ups enabled on PS/2 pins.
+- CPU Reset button properly debounced.
+- clrln routine fixed.
 
 ## [0.3.0] - 2018-10-15
 ### Added

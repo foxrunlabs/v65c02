@@ -93,89 +93,8 @@ main:       cli                         ; enable interrupts
             lda     #VGA_EN             ; VGA enabled, cursor disabled
             sta     VGA_STATUS          ; write new status register
             
-            ; UART initialization
-            lda     #.HIBYTE(B115200)
-            sta     UART_BRGH
-            lda     #.LOBYTE(B115200)
-            sta     UART_BRGL           ; Initialize UART to 115200 baud
-            
-            ; wait for TCVR_BUSY flag to clear
-@busy0:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #TCVR_BUSY          ; test TCVR_BUSY
-            bne     @busy0              ; TCVR_BUSY == 1? keep polling
-            
-            lda     #$ED                ; keyboard LEDs command
-            sta     KBD_TXREG           ; send to keyboard
-            
-@poll0:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #DATA_RDY           ; test DATA_RDY
-            beq     @poll0              ; DATA_RDY == 0? keep polling
-            
-            lda     KBD_RXREG           ; read keyboard RXREG
-            cmp     #$FA                ; ACK byte
-            bne     @screen             ; RXREG != ACK? skip everything else
-            
-            ; poll for busy flag
-@busy1:     lda     KBD_STATUS
-            bit     #TCVR_BUSY
-            bne     @busy1
-            
-            lda     #$07                ; turn all LEDs on
-            sta     KBD_TXREG           ; send to keyboard
-            
-@poll1:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #DATA_RDY           ; test DATA_RDY
-            beq     @poll1              ; DATA_RDY == 0? keep polling
-            
-            lda     KBD_RXREG
-            cmp     #$FA
-            bne     @screen
-            
-            ; 1 second delay
-            lda     #$80
-            sta     TMR_TIMER08
-            lda     #$F0
-            sta     TMR_TIMER16
-            lda     #$FA
-            sta     TMR_TIMER24
-            lda     #$02
-            sta     TMR_TIMER32
-            
-@delay0:    lda     TMR_STATUS
-            bit     #%00000001          ; test OVRFL flag
-            beq     @delay0             ; OVRFL == 1? keep polling
-            
-            ; poll for busy flag
-@busy2:     lda     KBD_STATUS
-            bit     #TCVR_BUSY
-            bne     @busy2
-            
-            lda     #$ED                ; keyboard LEDs command
-            sta     KBD_TXREG           ; send to keyboard
-            
-@poll2:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #DATA_RDY           ; test DATA_RDY
-            beq     @poll2              ; DATA_RDY == 0? keep polling
-            
-            lda     KBD_RXREG
-            cmp     #$FA
-            bne     @screen             ; RXREG != ACK? skip
-            
-            ; poll for busy flag
-@busy3:     lda     KBD_STATUS
-            bit     #TCVR_BUSY
-            bne     @busy3
-            
-            lda     #$00                ; turn LEDs off
-            sta     KBD_TXREG
-            
-@poll3:     lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #DATA_RDY           ; test DATA_RDY
-            beq     @poll3              ; DATA_RDY == 0? keep polling
-            
-            lda     KBD_RXREG           ; clear RXREG
-            
-@screen:    ldx     #.HIBYTE(bios_ver)
+            ; print header to the screen
+            ldx     #.HIBYTE(bios_ver)
             lda     #.LOBYTE(bios_ver)
             jsr     cputs               ; BIOS header
                         
@@ -187,6 +106,7 @@ main:       cli                         ; enable interrupts
             lda     #.LOBYTE(copyright)
             jsr     cputs               ; copyright
             
+            ; compute total RAM installed
             ldx     #0
             lda     #3
             jsr     gotoxy              ; move cursor to (0,3)
@@ -194,8 +114,7 @@ main:       cli                         ; enable interrupts
             ldx     #.HIBYTE(ram)
             lda     #.LOBYTE(ram)
             jsr     cputs               ; RAM message
-            
-            ; compute total RAM installed
+
             lda     #$02                ; start at $02FF
             sta     R1                  ; current RAM page
             lda     #$FF                ; RAM offset
@@ -221,6 +140,12 @@ main:       cli                         ; enable interrupts
             lda     #.LOBYTE(bytes)
             jsr     cputs               ; bytes string
             
+            ; UART initialization    
+            lda     #.HIBYTE(B115200)
+            sta     UART_BRGH
+            lda     #.LOBYTE(B115200)
+            sta     UART_BRGL           ; Initialize UART to 115200 baud
+                    
             ldx     #0
             lda     #4
             jsr     gotoxy              ; move cursor to (0,4)
@@ -229,17 +154,51 @@ main:       cli                         ; enable interrupts
             lda     #.LOBYTE(uart)
             jsr     cputs               ; UART setting string
             
+            ; keyboard detection
             ldx     #0
-            lda     #6
-            jsr     gotoxy              ; move cursor to (0,6)
+            lda     #5
+            jsr     gotoxy              ; move cursor to (0,5)
+            
+            ldx     #.HIBYTE(keyb)
+            lda     #.LOBYTE(keyb)
+            jsr     cputs               ; keyboard string
+            
+@kbd_echo:  lda     #ECHO               ; echo command
+            sta     KBD_TXREG           ; send to keyboard
+            
+@kbd_tx:    lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #TX_BUSY            ; test TX_BUSY
+            bne     @kbd_tx             ; TX_BUSY == 1? keep polling
+            
+            bit     #TX_ERR             ; test TX_ERR
+            bne     @kbd_echo           ; TX_ERR == 1? retry
+            
+@kbd_rx:    lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #DATA_RDY           ; test DATA_RDY
+            beq     @kbd_rx             ; DATA_RDY == 0? keep polling
+            
+            bit     #RX_ERR             ; test RX_ERR
+            bne     @kbd_echo           ; RX_ERR == 1? retry
+            
+            lda     KBD_RXREG           ; retrieve RXREG
+            cmp     #ECHO
+            bne     @kbd_echo           ; RXREG != ECHO? retry
+            
+            ldx     #.HIBYTE(ok)
+            lda     #.LOBYTE(ok)
+            jsr     cputs               ; OK string
+            
+            ldx     #0
+            lda     #7
+            jsr     gotoxy              ; move cursor to (0,7)
             
             ldx     #.HIBYTE(ready)
             lda     #.LOBYTE(ready)
             jsr     cputs               ; print ready message
             
             ldx     #0
-            lda     #7
-            jsr     gotoxy              ; move cursor to (0,7)
+            lda     #8
+            jsr     gotoxy              ; move cursor to (0,8)
             
 @done:      jmp     monitor             ; ROM monitor program
 
@@ -253,4 +212,6 @@ copyright:  .ASCIIZ "Copyright (C) 2018 Ryan Clarke"
 ram:        .ASCIIZ "RAM: "
 bytes:      .ASCIIZ " bytes"
 uart:       .ASCIIZ "UART: 115200 bps / 8-N-1"
+keyb:       .ASCIIZ "Keyboard: "
+ok:         .ASCIIZ "OK"
 ready:      .ASCIIZ "Ready."

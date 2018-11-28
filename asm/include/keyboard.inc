@@ -28,8 +28,15 @@
 
 ;= REGISTER BITS ===============================================================
 
-DATA_RDY  = %00000001                   ; data ready status bit
-SHIFT     = %00000010                   ; shift key status bit
-CTRL      = %00000100                   ; control key status bit
-ALT       = %00001000                   ; alt key status bit
-TCVR_BUSY = %00010000                   ; transceiver busy status bit
+DATA_RDY = %00000001                   ; data ready status bit
+RX_ERR   = %00000010                   ; receive error
+TX_BUSY  = %00000100                   ; transmit busy status bit
+TX_ERR   = %00001000                   ; transmit error
+SHIFT    = %00010000                   ; shift key status bit
+CTRL     = %00100000                   ; control key status bit
+ALT      = %01000000                   ; alt key status bit
+
+
+;= COMMANDS ====================================================================
+
+ECHO    = $EE

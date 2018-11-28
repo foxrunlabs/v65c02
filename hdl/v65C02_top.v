@@ -247,6 +247,7 @@ module v65C02_Top
     KeyboardController KeyboardController
         (
         .clk_i      (clk_cpu),
+        .rst_i      (rst_cpu),
         .en_i       (kbd_en),
         .we_i       (cpu_we),
         .addr_i     (cpu_addr[7:0]),

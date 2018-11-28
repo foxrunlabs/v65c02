@@ -34,6 +34,7 @@ module KeyboardController_tb;
 /* INPUTS *********************************************************************/
     
     reg       clk_i;
+    reg       rst_i;
     reg       en_i;
     reg       we_i;
     reg [7:0] addr_i;
@@ -70,6 +71,7 @@ module KeyboardController_tb;
     KeyboardController KeyboardController_uut
         (
         .clk_i      (clk_i),
+        .rst_i      (rst_i),
         .en_i       (en_i),
         .we_i       (we_i),
         .addr_i     (addr_i),
@@ -97,6 +99,9 @@ module KeyboardController_tb;
     
 /* MAIN ***********************************************************************/
     
+    // PS/2 commands
+    localparam SET_LED = 8'hED;
+    
     // scan codes
     localparam KEY_A   = 8'h1c,
                KEY_B   = 8'h32,
@@ -109,24 +114,44 @@ module KeyboardController_tb;
                TXREG  = 8'h02;
     
     initial begin
+        $display("\nKeyboardController Test Bench");
+        
+        rst_i  = 1'b0;
         en_i   = 1'b0;
         we_i   = 1'b0;
         addr_i = 8'h00;
         din_i  = 8'h00;
         
-        // press and release "a"
+        // read STATUS register
         #1;
-        press_key(KEY_A);
+        en_i   = 1'b1;
+        addr_i = STATUS;
         @(posedge clk_i);
+        
+        #1;
+        en_i = 1'b0;
+        @(posedge clk_i);
+        
+        $display("STATUS: %b\n", dout_o);
+        
+        // press "a"
+        $write("Pressing 'a'... ");
+        #1;
+        ps2_dev2host(KEY_A);
+        @(posedge clk_i);
+        $display("done.");
         
         #100000;    // 100 us delay
         
+        // release "a"
+        $write("Releasing 'a'... ");
         #1;
-        press_key(BREAK);
-        press_key(KEY_A);
+        ps2_dev2host(BREAK);
+        ps2_dev2host(KEY_A);
         @(posedge clk_i);
+        $display("done.");
         
-        // read the STATUS register and wait until there is a scan code avail.
+        // read the STATUS register and wait until there is a scan code ready
         #1;
         en_i   = 1'b1;
         addr_i = STATUS;
@@ -135,68 +160,145 @@ module KeyboardController_tb;
         while(~dout_o[0])
             @(posedge clk_i);
         
-        while(dout_o[4])
-            @(posedge clk_i);
+        $display("STATUS: %b", dout_o);
         
         // read RXREG
         #1;
-        en_i   = 1'b1;
         addr_i = RXREG;
         @(posedge clk_i);
         
+        // wait for output to register
+        @(posedge clk_i);
+        
+        $display("RXREG: %h", dout_o);
+        
+        // read STATUS again
         #1;
-        en_i   = 1'b0;
+        addr_i = STATUS;
         @(posedge clk_i);
         
-        // display the scan code
-        @(posedge clk_i);
-        $display("Scan code: %h", dout_o);
-        
-        #100000;
-        
-        // press and release shift + "b"
         #1;
-        press_key(L_SHIFT);
-        #100000;
-        press_key(KEY_B);
+        en_i = 1'b0;
         @(posedge clk_i);
         
+        $display("STATUS: %b\n", dout_o);
+        
+        #100000;    // 100 us delay
+        
+        // press shift + "b"
+        $write("Pressing SHIFT+'b'... ");
+        #1;
+        ps2_dev2host(L_SHIFT);
+        #100000;
+        ps2_dev2host(KEY_B);
+        @(posedge clk_i);
+        $display("done.");
+        
+        // read the STATUS register and wait until shift key is registered
         #1;
         en_i   = 1'b1;
         addr_i = STATUS;
         @(posedge clk_i);
         
-        while(dout_o[4])
+        while(~dout_o[4])
             @(posedge clk_i);
         
+        #1;
+        en_i = 1'b0;
         @(posedge clk_i);
-        $display("STATUS Register: %h", dout_o);
+        
+        // display STATUS register
+        $display("STATUS: %b", dout_o);
+        
+        #100000;    // 100 us delay
+        
+        // release "b" + shift
+        $write("Releasing SHIFT+'b'... ");
+        #1;
+        ps2_dev2host(BREAK);
+        ps2_dev2host(KEY_B);
+        #100000;
+        ps2_dev2host(BREAK);
+        ps2_dev2host(L_SHIFT);
+        @(posedge clk_i);
+        $display("done.");
+        
+        // read STATUS register
+        #1;
+        en_i   = 1'b1;
+        addr_i = STATUS;
+        @(posedge clk_i);
+        
+        // wait for output to register
+        @(posedge clk_i);
+        
+        // display STATUS register
+        $display("STATUS: %b", dout_o);
+        
+        // read RXREG
+        #1;
+        addr_i = RXREG;
+        @(posedge clk_i);
+        
+        // wait for output to register
+        @(posedge clk_i);
+        
+        $display("RXREG: %h", dout_o);
+        
+        // read STATUS register
+        #1;
+        addr_i = STATUS;
+        @(posedge clk_i);
+        
+        // wait for output to register
+        #1;
+        en_i = 1'b0;
+        @(posedge clk_i);
+        
+        // display STATUS register
+        $display("STATUS: %b\n", dout_o);
+        
+        // simulate host-to-device communication
+        $write("Sending command to host... ");
+        #1;
+        en_i   = 1'b1;
+        we_i   = 1'b1;
+        addr_i = TXREG;
+        din_i  = SET_LED;
+        @(posedge clk_i);
         
         #1;
-        en_i   = 1'b0;
+        en_i  = 1'b0;
+        we_i  = 1'b0;
         @(posedge clk_i);
+        $display("done.");
         
-        #100000;
-        
-        #1;
-        press_key(BREAK);
-        press_key(KEY_B);
-        #100000;
-        press_key(BREAK);
-        press_key(L_SHIFT);
-        @(posedge clk_i);
-        
+        // read STATUS register
         #1;
         en_i   = 1'b1;
         addr_i = STATUS;
         @(posedge clk_i);
         
         #1;
-        en_i   = 1'b0;
+        en_i = 1'b0;
         @(posedge clk_i);
         
+        $display("STATUS: %b", dout_o);
+        
+        // simulate device
+        ps2_host2dev();
+        
+        // read STATUS register
+        #1;
+        en_i   = 1'b1;
+        addr_i = STATUS;
         @(posedge clk_i);
-        $display("STATUS Register: %h", dout_o);
+        
+        #1;
+        en_i = 1'b0;
+        @(posedge clk_i);
+        
+        $display("STATUS: %b\n", dout_o);
         
         // done
         @(posedge clk_i) $stop;
@@ -218,16 +320,16 @@ module KeyboardController_tb;
     
     
     // simulate device-to-host communication
-    task press_key;
-        input [7:0] key;
+    task ps2_dev2host;
+        input [7:0] din;
         
         integer        i;
         reg            parity;
         reg     [10:0] frame;
         
         begin            
-            parity = ~(^ key);
-            frame  = {B_STOP, parity, key, B_START};
+            parity = ~(^ din);
+            frame  = {B_STOP, parity, din, B_START};
             
             // 10 kHz PS/2 clock
             for(i = 0; i < 11; i = i + 1) begin
@@ -241,6 +343,45 @@ module KeyboardController_tb;
                 #50000;
                 device_clk = 1'b1;
             end
+        end    
+    endtask
+    
+    
+    // simulate host-to-device communication
+    task ps2_host2dev;
+        integer        i;
+        reg     [10:0] data;
+        reg            parity;
+        begin
+            data = {11{1'b1}};
+            
+            @(posedge ps2_clk_bus);
+            
+            // 10kHz PS/2 clock
+            for(i = 0; i < 10; i = i + 1)
+                begin                    
+                    // 50 us half-period
+                    #50000;
+                    device_clk = 1'b0;
+                    
+                    // 50 us half-period
+                    #50000;
+                    device_clk = 1'b1;
+                    data       = {ps2_data_bus, data[10:1]};
+                end
+            
+            #25000;
+            parity      = ~(^ data[8:1]);
+            device_data = ~(parity == data[9]);
+            
+            #25000;
+            device_clk = 1'b0;
+            
+            #50000;
+            device_clk  = 1'b1;
+            device_data = 1'b1;
+            
+            $display("[PS/2 Device] Received: %h", data[8:1]);
         end    
     endtask
     

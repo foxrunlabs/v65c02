@@ -34,18 +34,18 @@ module PS2Transceiver_tb;
 /* INPUTS *********************************************************************/
     
     reg       clk_i;
+    reg       rst_i;
     reg       we_i;
     reg [7:0] din_i;
     
     
 /* OUTPUTS ********************************************************************/
     
-    wire       busy_o;
-    wire       tx_stb_o;
-    wire       tx_err_stb_o;
+    wire       tx_busy_o;
+    wire       tx_err_o;
     wire       rx_stb_o;
+    wire       rx_err_o;
     wire [7:0] dout_o;
-    wire       rx_err_stb_o;
     
     
 /* BI-DIRECTIONAL *************************************************************/
@@ -72,17 +72,17 @@ module PS2Transceiver_tb;
     // unit under test
     PS2Transceiver PS2Transceiver_uut
         (
-        .clk_i       (clk_i),
-        .ps2_clk_io  (ps2_clk_bus),
-        .ps2_data_io (ps2_data_bus),
-        .busy_o      (busy_o),
-        .we_i        (we_i),
-        .din_i       (din_i),
-        .tx_stb_o    (tx_stb_o),
-        .tx_err_stb_o(tx_err_stb_o),
-        .rx_stb_o    (rx_stb_o),
-        .dout_o      (dout_o),
-        .rx_err_stb_o(rx_err_stb_o)
+        .clk_i      (clk_i),
+        .rst_i      (rst_i),
+        .ps2_clk_io (ps2_clk_bus),
+        .ps2_data_io(ps2_data_bus),
+        .we_i       (we_i),
+        .din_i      (din_i),
+        .tx_busy_o  (tx_busy_o),
+        .tx_err_o   (tx_err_o),
+        .rx_stb_o   (rx_stb_o),
+        .rx_err_o   (rx_err_o),
+        .dout_o     (dout_o)
         );
     
     
@@ -101,13 +101,14 @@ module PS2Transceiver_tb;
     end
     
     
-/* MAIN ***********************************************************************/
+/* MAIN SIMULATION ************************************************************/
     
     // scan codes
     localparam KEY_U = 8'h3C;
     localparam KEY_Q = 8'h15;
     
-    initial begin        
+    initial begin
+        rst_i = 1'b0;
         we_i  = 1'b0;
         din_i = 8'h00;
                 
@@ -129,7 +130,7 @@ module PS2Transceiver_tb;
         // simulate host-to-device communication
         #1;
         we_i  = 1'b1;
-        din_i = KEY_U;
+        din_i = 8'h7F;
         @(posedge clk_i);
         
         #1;
@@ -144,10 +145,11 @@ module PS2Transceiver_tb;
     end
     
     
-    // display scan code when received
+/* SCAN CODE PRINTER **********************************************************/
+    
     always @(posedge clk_i)
         if(rx_stb_o)
-            $display("Scan code: %h", dout_o);
+            $display("Host Received: %h", dout_o);
     
     
 /* PS/2 KEYBOARD SIMULATOR ****************************************************/
@@ -166,15 +168,15 @@ module PS2Transceiver_tb;
     
     // simulate device-to-host communication
     task ps2_dev2host;
-        input [7:0] key;
+        input [7:0] din;
         
         integer        i;
         reg            parity;
         reg     [10:0] frame;
         
         begin            
-            parity = ~(^ key);
-            frame  = {B_STOP, parity, key, B_START};
+            parity = ~(^ din);
+            frame  = {B_STOP, parity, din, B_START};
             
             // 10 kHz PS/2 clock
             for(i = 0; i < 11; i = i + 1) begin
@@ -218,7 +220,6 @@ module PS2Transceiver_tb;
             #25000;
             parity      = ~(^ data[8:1]);
             device_data = ~(parity == data[9]);
-            device_data = 1'b1;
             
             #25000;
             device_clk = 1'b0;
@@ -226,6 +227,8 @@ module PS2Transceiver_tb;
             #50000;
             device_clk  = 1'b1;
             device_data = 1'b1;
+            
+            $display("Host Sent: %h", data[8:1]);
         end    
     endtask
     

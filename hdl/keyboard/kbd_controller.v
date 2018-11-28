@@ -31,6 +31,7 @@ Purpose : PS/2 keyboard controller for the v65C02 8-bit Computer.
 module KeyboardController
     (
     input  wire       clk_i,        // CPU clock
+    input  wire       rst_i,        // reset
     
     input  wire       en_i,         // controller bus select
     input  wire       we_i,         // write enable
@@ -55,7 +56,8 @@ module KeyboardController
     reg  [7:0] dout_reg;            // register output
     
     assign shift  = lshift_ff | rshift_ff;
-    assign status = {3'b000, tcvr_busy, alt_ff, ctrl_ff, shift, data_rdy_ff};
+    assign status = {1'b0, alt_ff, ctrl_ff, shift, tx_err, tcvr_busy, rx_err,
+                     data_rdy_ff};
     
     // read logic
     initial dout_reg = 8'h00;
@@ -72,30 +74,29 @@ module KeyboardController
     
     
 /* TRANSCEIVER ****************************************************************/
-    
+
+    wire       tcvr_we;                 // write enable    
     wire       tcvr_busy;               // busy flag
-    wire       tcvr_we;                 // write enable
-    wire       tx_stb;                  // transmit data complete strobe
-    wire       tx_err_stb;              // transmit error strobe
+    wire       tx_err;                  // transmit error
     wire       rx_stb;                  // receive data complete strobe
+    wire       rx_err;                  // receive error
     wire [7:0] rx_data;                 // received data
-    wire       rx_err_stb;              // receive error strobe
     
     assign tcvr_we = en_i & we_i & (addr_i == TXREG);
     
     PS2Transceiver PS2Transceiver
         (
         .clk_i       (clk_i),
+        .rst_i       (rst_i),
         .ps2_clk_io  (ps2_clk_io),
         .ps2_data_io (ps2_data_io),
-        .busy_o      (tcvr_busy),
         .we_i        (tcvr_we),
         .din_i       (din_i),
-        .tx_stb_o    (tx_stb),
-        .tx_err_stb_o(tx_err_stb),
+        .tx_busy_o   (tcvr_busy),
+        .tx_err_o    (tx_err),
         .rx_stb_o    (rx_stb),
-        .dout_o      (rx_data),
-        .rx_err_stb_o(rx_err_stb)
+        .rx_err_o    (rx_err),
+        .dout_o      (rx_data)
         );
     
     
@@ -119,8 +120,12 @@ module KeyboardController
     reg [1:0] state_ns;
     
     initial state_reg = S_IDLE;
-    always @(posedge clk_i)
-        state_reg <= #1 state_ns;
+    always @(posedge clk_i) begin
+        if(rst_i)
+            state_reg <= #1 S_IDLE;
+        else
+            state_reg <= #1 state_ns;
+    end
     
     // next state logic
     always @* begin
