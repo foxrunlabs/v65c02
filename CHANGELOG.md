@@ -3,12 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2018-11-28
 ### Added
-- PS/2 transmitter implemented in PS/2 transceiver module.
+- PS/2 keyboard controller implemented as a transceiver module with separate receiver and transmitter.
 ### Changed
-- Zero Page memory map, including 16 general purpose "registers."
-- XMODEM receiver stores file at $0200
+- Implemented a new zero page memory map, including 16 general purpose "registers."
+- XMODEM receiver stores file at $0200 and the run command executes at $0200.
 ### Fixed
 - Pull-ups enabled on PS/2 pins.
 - CPU Reset button properly debounced.

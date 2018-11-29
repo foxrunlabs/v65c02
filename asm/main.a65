@@ -45,9 +45,7 @@
 
 ;= CONSTANTS ===================================================================
 
-.DEFINE     VERSION "0.3.0"
-
-VGA_EN = %00000001                      ; EN bit of VGA STATUS register
+.DEFINE     VERSION "1.0.0"
 
 
 ;= BIOS ENTRY POINT ============================================================

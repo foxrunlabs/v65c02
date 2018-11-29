@@ -39,7 +39,8 @@ Purpose : Seven-segment display controller for the v65C02 8-bit Computer on the
           DP      DP7 | DP6 | DP5 | DP4 | DP3 | DP2 | DP1 | DP0
           
           There are also four data registers to write two hexadecimal digits at
-          a time, aka to write a byte.
+          a time, aka to write a byte, as well as eight data registers to write
+          to individual digits.
 *******************************************************************************/
 
 

@@ -23,6 +23,7 @@ Verilog and 65C02 assembler source to implement an 8-bit computer on the [Digile
 * PS/2 Keyboard
 * Serial Port
     * User Configurable UART
+* 32-bit Timer
 
 The user must generate the system and pixel clocks in the top-level module using the Xilinx Clocking Wizard. Due to copyright restrictions, the clock IP is not included with this repository.
 
