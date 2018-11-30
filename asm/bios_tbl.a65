@@ -1,0 +1,64 @@
+;===============================================================================
+;Copyright (C) 2018 Ryan Clarke
+;
+;This program is free software (firmware): you can redistribute it and/or modify
+;it under the terms of the GNU General Public License as published by
+;the Free Software Foundation, either version 3 of the License, or
+;(at your option) any later version.
+;
+;This program is distributed in the hope that it will be useful,
+;but WITHOUT ANY WARRANTY; without even the implied warranty of
+;MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;GNU General Public License for more details.
+;
+;You should have received a copy of the GNU General Public License
+;along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;===============================================================================
+
+;===============================================================================
+; Program   : v65C02 BIOS
+; File Name : bios_tbl.a65
+; Project   : v65C02 8-bit Computer
+; Author    : Ryan Clarke
+; E-mail    : kj6msg@icloud.com
+;===============================================================================
+; Purpose : BIOS subroutines table for the v65C02 8-bit Computer.
+;===============================================================================
+
+
+.PC02
+
+.IMPORT reset
+.IMPORT clrscr
+.IMPORT putch
+.IMPORT cputs
+.IMPORT gotoxy
+.IMPORT uart_getc
+.IMPORT uart_putc
+.IMPORT uart_puts
+
+.EXPORT bios_lo
+.EXPORT bios_hi
+
+
+;= BIOS SUBROUTINES RTS TABLE ==================================================
+
+.RODATA
+
+bios_lo:    .BYTE .LOBYTE(reset-1)
+            .BYTE .LOBYTE(clrscr-1)
+            .BYTE .LOBYTE(putch-1)
+            .BYTE .LOBYTE(cputs-1)
+            .BYTE .LOBYTE(gotoxy-1)
+            .BYTE .LOBYTE(uart_getc-1)
+            .BYTE .LOBYTE(uart_putc-1)
+            .BYTE .LOBYTE(uart_puts-1)
+
+bios_hi:    .BYTE .HIBYTE(reset-1)
+            .BYTE .HIBYTE(clrscr-1)
+            .BYTE .HIBYTE(putch-1)
+            .BYTE .HIBYTE(cputs-1)
+            .BYTE .HIBYTE(gotoxy-1)
+            .BYTE .HIBYTE(uart_getc-1)
+            .BYTE .HIBYTE(uart_putc-1)
+            .BYTE .HIBYTE(uart_puts-1)

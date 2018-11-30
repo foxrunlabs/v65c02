@@ -33,6 +33,8 @@
 .INCLUDE    "memory.inc"
 .INCLUDE    "uart.inc"
 
+.IMPORT     bios_lo
+.IMPORT     bios_hi
 .IMPORT     clrscr
 .IMPORT     cputs
 .IMPORT     gotoxy
@@ -45,7 +47,7 @@
 
 ;= CONSTANTS ===================================================================
 
-.DEFINE     VERSION "1.0.0"
+.DEFINE     VERSION "1.1.0"
 
 
 ;= BIOS ENTRY POINT ============================================================
@@ -90,6 +92,16 @@ main:       cli                         ; enable interrupts
             jsr     clrscr              ; clear the screen
             lda     #VGA_EN             ; VGA enabled, cursor disabled
             sta     VGA_STATUS          ; write new status register
+            
+            ; copy BIOS routine table addresses to zero page location
+            lda     #.LOBYTE(bios_lo)
+            sta     BIOSLO
+            lda     #.HIBYTE(bios_lo)
+            sta     BIOSLO+1
+            lda     #.LOBYTE(bios_hi)
+            sta     BIOSHI
+            lda     #.HIBYTE(bios_hi)
+            sta     BIOSHI+1
             
             ; print header to the screen
             ldx     #.HIBYTE(bios_ver)

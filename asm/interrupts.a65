@@ -30,6 +30,8 @@
 
 .IMPORT start
 
+.EXPORT reset
+
 
 ;= INTERRUPT ROUTINES ==========================================================
 

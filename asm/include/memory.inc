@@ -126,3 +126,9 @@ MEM   = $35
 MEML  = $35
 MEMH  = $36
 BUF   = $37
+
+; BIOS Routines
+BIOSLO = $47
+BIOSHI = $49
+PARAM1 = $4B
+PARAM2 = $4C
