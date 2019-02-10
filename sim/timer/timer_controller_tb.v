@@ -37,7 +37,7 @@ module TimerController_tb;
     reg       clk_i;
     reg       en_i;
     reg       we_i;
-    reg [7:0] addr_i;
+    reg [2:0] addr_i;
     reg [7:0] din_i;
     
     
@@ -79,29 +79,29 @@ module TimerController_tb;
     initial begin
         en_i   = 1'b0;
         we_i   = 1'b0;
-        addr_i = 8'h00;
+        addr_i = 3'o0;
         din_i  = 8'd0;
         
         // write 10 to TIMER
         #1;
         en_i   = 1'b1;
         we_i   = 1'b1;
-        addr_i = 8'h01;
+        addr_i = 3'o1;
         din_i  = 8'd10;
         @(posedge clk_i);
         
         #1;
-        addr_i = 8'h02;
+        addr_i = 3'o2;
         din_i  = 8'h00;
         @(posedge clk_i);
         
         #1;
-        addr_i = 8'h03;
+        addr_i = 3'o3;
         din_i  = 8'h00;
         @(posedge clk_i);
         
         #1;
-        addr_i = 8'h04;
+        addr_i = 3'o4;
         din_i  = 8'h00;
         @(posedge clk_i);
         
@@ -114,7 +114,7 @@ module TimerController_tb;
         // read STATUS register
         #1;
         en_i   = 1'b1;
-        addr_i = 8'h00;
+        addr_i = 3'o0;
         @(posedge clk_i);
         
         // test the OVRFL flag
@@ -130,7 +130,7 @@ module TimerController_tb;
         #1;
         en_i   = 1'b1;
         we_i   = 1'b1;
-        addr_i = 8'h04;
+        addr_i = 3'o4;
         din_i  = 8'h00;
         @(posedge clk_i);
         
@@ -143,7 +143,7 @@ module TimerController_tb;
         // read STATUS register
         #1;
         en_i   = 1'b1;
-        addr_i = 8'h00;
+        addr_i = 3'o0;
         @(posedge clk_i);
         
         // test the OVRFL flag

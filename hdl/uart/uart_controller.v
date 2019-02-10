@@ -54,7 +54,7 @@ module UARTController
     input  wire       en_i,         // control bus select
     input  wire       we_i,         // write enable
     
-    input  wire [7:0] addr_i,       // 8-bit register address
+    input  wire [2:0] addr_i,       // 3-bit register address
     input  wire [7:0] din_i,        // 8-bit register data input
     output wire [7:0] dout_o,       // 8-bit register data output
     
@@ -79,11 +79,11 @@ module UARTController
     
 /* CONTROLLER REGISTERS *******************************************************/
     
-    localparam STATUS = 8'h00,
-               BRGL   = 8'h01,
-               BRGH   = 8'h02,
-               TXREG  = 8'h03,
-               RXREG  = 8'h04;
+    localparam STATUS = 3'o0,
+               BRGL   = 3'o1,
+               BRGH   = 3'o2,
+               TXREG  = 3'o3,
+               RXREG  = 3'o4;
     
     reg [7:0] brgl_reg;             // baud rate generator (LSB)
     reg [7:0] brgh_reg;             // baud rate generator (MSB)

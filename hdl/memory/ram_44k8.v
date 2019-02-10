@@ -18,48 +18,45 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : ROM_16K8
+Module Name : RAM_44K8
 Top Module  : v65C02_Top
-File Name   : rom_16k8.v
+File Name   : ram_44k8.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
-Purpose : 16K x 8-bit ROM for the v65C02 8-bit Computer.
-
-          Loads the ROM with an 8-bit hexadecimal formatted text file.
+Purpose : 44K x 8-bit write-first RAM for the v65C02 8-bit Computer.
           
           All outputs are registered for a one clock cycle delay.
 *******************************************************************************/
 
 
-module ROM_16K8
+module RAM_44K8
     (
     input wire        clk_i,    // system clock
     
-    input wire        en_i,     // ROM enable
+    input wire        en_i,     // RAM enable
+    input wire        we_i,     // write enable
     
-    input wire [13:0] addr_i,   // 14-bit address
-    output reg [7:0]  dout_o    // 8-bit data output
+    input wire [15:0] addr_i,   // 16-bit address
+    input wire [7:0]  din_i,    // 8-bit data input
+    output reg [7:0]  dout_o    // 8-bit data outut
     );
     
     
 /* DECLARATIONS ***************************************************************/
     
-    // 4K x 8-bit block RAM
-    (* rom_style = "block" *) reg [7:0] rom_reg [0:16383];
+    // 44K x 8-bit block RAM
+    (* ram_style = "block" *) reg [7:0] ram_reg [0:45055];
     
     
-/* ROM INITIALIZATION *********************************************************/
-    
-    // Initialize the ROM
-    initial $readmemh("bios.txt", rom_reg, 0, 16383);
-    
-    
-/* ROM REGISTER ***************************************************************/
+/* RAM REGISTER ***************************************************************/
     
     always @(posedge clk_i)
         if(en_i)
-            dout_o <= #1 rom_reg[addr_i];
+            if(we_i)
+                ram_reg[addr_i] <= #1 din_i;
+            else
+                dout_o <= #1 ram_reg[addr_i];
     
 endmodule

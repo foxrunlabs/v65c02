@@ -108,27 +108,29 @@ clrln:      ldx     #0
 ;
 ; Destroys: VRAML, VRAMH
 ;
-; Cycles (jsr->rts): 110783
+; Cycles (jsr->rts): 104177
 
 .CODE
 
-clrscr:     lda     #.HIBYTE(VRAM_START)
+clrscr:     lda     #.HIBYTE(VRAM_END)
             sta     VRAMH
-            lda     #.LOBYTE(VRAM_START)
-            sta     VRAML               ; (VRAM) = VRAM address
+            lda     #.LOBYTE(VRAM_END)
+            sta     VRAML               ; (VRAM) = VRAM end address
             
-@loop:      lda     #NUL                ; A = NUL character
-            sta     (VRAM)              ; store NUL to VRAM
-            inc     VRAML               ; increment VRAM address LSB
-            lda     #ATTRIB             ; A = attribute
+@loop:      lda     #ATTRIB             ; A = attribute
             sta     (VRAM)              ; store attribute to VRAM
-            inc     VRAML               ; increment VRAM address LSB
-            bne     @loop               ; $0000 > 0? loop
+            dec     VRAML               ; decrement VRAM address LSB
+            lda     #NUL                ; A = NUL
+            sta     (VRAM)              ; store NUL to VRAM
+            dec     VRAML               ; decrement VRAM address LSB
+            lda     VRAML               ; A = VRAM address LSB
+            cmp     #$FF                ; VRAML == $FF?
+            bne     @loop               ; no, loop
             
-            inc     VRAMH               ; increment VRAM address MSB
+            dec     VRAMH               ; decrement VRAM address MSB
             lda     VRAMH               ; A = VRAM address MSB
-            cmp     #.HIBYTE(VRAM_END)  ; compare VRAM addr w/ VRAM end (MSBs)
-            bne     @loop               ; VRAM address MSB < end? loop
+            cmp     #.HIBYTE(VRAM_START)-1
+            bne     @loop               ; VRAM address MSB >= start? loop
             
             stz     VGA_CURSH
             stz     VGA_CURSL           ; set cursor to (0,0)

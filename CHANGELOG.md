@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Changed
+- v65C02 IP core changed to maximize RAM use. IO devices now between $BFA0-$BFFF, video RAM between $B000-$BF9F, and program RAM between $0200-$AFFF (44 KiB total). Limited to 12 IO devices, with 8 registers each. This removed the individual digit registers for the SSEG.
+- Updated test benches to reflect changes.
+### Fixed
+- Fixed issue in htou8 routine. If high byte invalid, routine would not clear stack, resulting in crash.
+
 ## [1.1.0] - 2018-11-29
 ###
 - BIOS subroutine table and appropriate zero page locations to access it from user software. Intended to be used as an RTS table.

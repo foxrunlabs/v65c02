@@ -37,7 +37,7 @@ module UARTController_tb;
     reg       clk_i;
     reg       en_i;
     reg       we_i;
-    reg [7:0] addr_i;
+    reg [2:0] addr_i;
     reg [7:0] din_i;
     
     reg       tx_we_i;
@@ -99,14 +99,14 @@ module UARTController_tb;
     initial begin
         en_i   = 1'b0;
         we_i   = 1'b0;
-        addr_i = 8'h00;
+        addr_i = 3'o0;
         din_i  = 8'h00;
         
         // set BRG = 0x0001
         #1;
         en_i   = 1'b1;
         we_i   = 1'b1;
-        addr_i = 8'h01;
+        addr_i = 3'o1;
         din_i  = 8'h01;
         @(posedge clk_i);
         
@@ -118,7 +118,7 @@ module UARTController_tb;
         #1;
         en_i = 1'b1;
         we_i = 1'b1;
-        addr_i = 8'h02;
+        addr_i = 3'o2;
         din_i  = 8'h00;
         @(posedge clk_i);
         
@@ -131,7 +131,7 @@ module UARTController_tb;
         #1;
         en_i   = 1'b1;
         we_i   = 1'b1;
-        addr_i = 8'h03;
+        addr_i = 3'o3;
         din_i  = 8'h75;
         @(posedge clk_i);
         
@@ -152,7 +152,7 @@ module UARTController_tb;
         // wait for complete transmission
         #1;
         en_i   = 1'b1;
-        addr_i = 8'h00;
+        addr_i = 3'o0;
         @(posedge clk_i);
         
         // delay for read
@@ -173,7 +173,7 @@ module UARTController_tb;
         //read received byte        
         #1;
         en_i = 1'b1;
-        addr_i = 8'h04;
+        addr_i = 3'o4;
         @(posedge clk_i);
         
         #1;

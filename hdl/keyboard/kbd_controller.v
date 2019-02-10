@@ -36,7 +36,7 @@ module KeyboardController
     input  wire       en_i,         // controller bus select
     input  wire       we_i,         // write enable
     
-    input  wire [7:0] addr_i,       // 8-bit register address
+    input  wire [2:0] addr_i,       // 3-bit register address
     input  wire [7:0] din_i,        // 8-bit register data input
     output wire [7:0] dout_o,       // 8-bit register data output
     
@@ -47,9 +47,9 @@ module KeyboardController
     
 /* CONTROLLER REGISTERS *******************************************************/
     
-    localparam STATUS = 8'h00,
-               RXREG  = 8'h01,
-               TXREG  = 8'h02;
+    localparam STATUS = 3'o0,
+               RXREG  = 3'o1,
+               TXREG  = 3'o2;
     
     wire [7:0] status;              // STATUS register bits
     wire       shift;               // combination of left and right shift keys

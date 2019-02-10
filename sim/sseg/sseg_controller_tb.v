@@ -34,11 +34,11 @@ module SevenSegmentController_tb;
     
 /* INPUTS *********************************************************************/
     
-    reg        clk_i;
-    reg        en_i;
-    reg        we_i;
-    reg [11:0] addr_i;
-    reg [7:0]  din_i;
+    reg       clk_i;
+    reg       en_i;
+    reg       we_i;
+    reg [2:0] addr_i;
+    reg [7:0] din_i;
     
     
 /* OUTPUTS  *******************************************************************/
@@ -79,25 +79,38 @@ module SevenSegmentController_tb;
 /* MAIN ***********************************************************************/
     
     initial begin
-        en_i   =  1'b0;
-        we_i   =  1'b0;
-        addr_i = 12'h000;
-        din_i  =  8'd0;
+        en_i   = 1'b0;
+        we_i   = 1'b0;
+        addr_i = 3'o0;
+        din_i  = 8'd0;
         
         // write 76543210 to the seven-segment display
-        for(integer i = 2; i < 10; i = i + 1) begin
-            #1;
-            en_i   = 1'b1;
-            we_i   = 1'b1;
-            addr_i = i;
-            din_i  = i - 2;
-            @(posedge clk_i);
-        end
+        #1;
+        en_i   = 1'b1;
+        we_i   = 1'b1;
+        addr_i = 3'o2;
+        din_i  = 8'h10;
+        @(posedge clk_i);
+        
+        #1;
+        addr_i = 3'o3;
+        din_i  = 8'h32;
+        @(posedge clk_i);
+        
+        #1;
+        addr_i = 3'o4;
+        din_i  = 8'h54;
+        @(posedge clk_i);
+        
+        #1;
+        addr_i = 3'o5;
+        din_i  = 8'h76;
+        @(posedge clk_i);
         
         // enable all digits
         #1;
-        addr_i = 12'h000;
-        din_i  =  8'hFF;
+        addr_i = 3'o0;
+        din_i  = 8'hFF;
         @(posedge clk_i);
         
         // deselect controller bus
@@ -113,8 +126,8 @@ module SevenSegmentController_tb;
         #1;
         en_i   = 1'b1;
         we_i   = 1'b1;
-        addr_i = 12'h000;
-        din_i  =  8'hF0;
+        addr_i = 3'o0;
+        din_i  = 8'hF0;
         @(posedge clk_i);
         
         // deselect controller bus

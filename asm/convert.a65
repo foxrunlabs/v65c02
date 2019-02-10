@@ -51,7 +51,7 @@
 ;
 ; Destroys:   BYTE
 ;
-; Cycles (jsr->rts): 32-63 (invalid high nibble - $FF)
+; Cycles (jsr->rts): 36-63 (invalid high nibble - $FF)
 
 .CODE
 
@@ -84,7 +84,8 @@ htou8:      pha                         ; save hex low nibble
 @validLSN:  ora     BYTE                ; combine high and low nibbles
             bra     @exit               ; done
             
-@invalid:   lda     #$00                ; invalid input = $00 value
+@invalid:   pla                         ; clear the stack
+            lda     #$00                ; invalid input = $00 value
             
 @exit:      rts
 

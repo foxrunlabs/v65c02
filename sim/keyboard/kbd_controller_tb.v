@@ -37,7 +37,7 @@ module KeyboardController_tb;
     reg       rst_i;
     reg       en_i;
     reg       we_i;
-    reg [7:0] addr_i;
+    reg [2:0] addr_i;
     reg [7:0] din_i;
     
     
@@ -109,9 +109,9 @@ module KeyboardController_tb;
                BREAK   = 8'hf0;
     
     // controller registers
-    localparam STATUS = 8'h00,
-               RXREG  = 8'h01,
-               TXREG  = 8'h02;
+    localparam STATUS = 3'o0,
+               RXREG  = 3'o1,
+               TXREG  = 3'o2;
     
     initial begin
         $display("\nKeyboardController Test Bench");
@@ -119,7 +119,7 @@ module KeyboardController_tb;
         rst_i  = 1'b0;
         en_i   = 1'b0;
         we_i   = 1'b0;
-        addr_i = 8'h00;
+        addr_i = 3'o0;
         din_i  = 8'h00;
         
         // read STATUS register

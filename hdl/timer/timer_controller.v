@@ -36,7 +36,7 @@ module TimerController
     input  wire       en_i,         // controller bus select
     input  wire       we_i,         // controller bus write enable
     
-    input  wire [7:0] addr_i,       // 8-bit register address
+    input  wire [2:0] addr_i,       // 3-bit register address
     input  wire [7:0] din_i,        // 8-bit register data input
     output reg  [7:0] dout_o        // 8-bit register data output
     );
@@ -44,11 +44,11 @@ module TimerController
     
 /* CONTROLLER BUS *************************************************************/
     
-    localparam R_STATUS  = 8'h00,
-               R_TIMER08 = 8'h01,
-               R_TIMER16 = 8'h02,
-               R_TIMER24 = 8'h03,
-               R_TIMER32 = 8'h04;
+    localparam R_STATUS  = 3'o0,
+               R_TIMER08 = 3'o1,
+               R_TIMER16 = 3'o2,
+               R_TIMER24 = 3'o3,
+               R_TIMER32 = 3'o4;
     
     reg  [31:0] timer_reg;
     wire        timer_rst;
