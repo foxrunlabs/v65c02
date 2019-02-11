@@ -19,27 +19,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /*******************************************************************************
 Module Name : SevenSegmentController
-Dependences : HexToSSEG
 File Name   : sseg_controller.v
+Dependences : HexToSSEG
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
-Purpose : Seven-segment display controller for the v65C02 8-bit Computer on the
-          Nexys 4 DDR FPGA development board.
-          
-          The controller has two control registers: DIGITS, and DP. DIGITS
-          controls the individual status of each seven-segment display, and DP
-          controls the status of each decimal point.
-          
-                 -----------------------------------------------
-                   7  |  6  |  5  |  4  |  3  |  2  |  1  |  0
-                 -----------------------------------------------
-          DIGITS   D7 |  D6 |  D5 |  D4 |  D3 |  D2 |  D1 |  D0
-          DP      DP7 | DP6 | DP5 | DP4 | DP3 | DP2 | DP1 | DP0
-          
-          There are also four data registers to write two hexadecimal digits at
-          a time.
+Purpose : Seven-segment display controller for the v65C02 8-bit Computer.
 *******************************************************************************/
 
 
@@ -49,7 +35,7 @@ module SevenSegmentController
     
     input wire        en_i,             // controller bus enable
     input wire        we_i,             // write enable
-    input wire  [2:0] addr_i,           // 3-bit register address bus
+    input wire  [2:0] regsel_i,         // 3-bit register select
     input wire  [7:0] din_i,            // 8-bit data input bus
     
     output wire [7:0] an_n_o,           // anode (active low)
@@ -76,7 +62,7 @@ module SevenSegmentController
     always @(posedge clk_i)
         if(en_i)
             if(we_i)
-                case(addr_i)
+                case(regsel_i)
                     R_DIGITS: digits_reg <= #1 din_i;
                     R_DP:     dp_reg     <= #1 din_i;
                 endcase
@@ -85,7 +71,7 @@ module SevenSegmentController
     always @(posedge clk_i)
         if(en_i)
             if(we_i)
-                case(addr_i)
+                case(regsel_i)
                     R_BYTE0:
                         begin
                             data_reg[0] <= #1 din_i[3:0];

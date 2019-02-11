@@ -37,7 +37,7 @@ module UARTController_tb;
     reg       clk_i;
     reg       en_i;
     reg       we_i;
-    reg [2:0] addr_i;
+    reg [2:0] regsel_i;
     reg [7:0] din_i;
     
     reg       tx_we_i;
@@ -57,14 +57,14 @@ module UARTController_tb;
     
     UARTController UARTController_uut
         (
-        .clk_i (clk_i),
-        .en_i  (en_i),
-        .we_i  (we_i),
-        .addr_i(addr_i),
-        .din_i (din_i),
-        .dout_o(dout_o),
-        .tx_o  (tx_o),
-        .rx_i  (tx_dout)
+        .clk_i   (clk_i),
+        .en_i    (en_i),
+        .we_i    (we_i),
+        .regsel_i(regsel_i),
+        .din_i   (din_i),
+        .dout_o  (dout_o),
+        .tx_o    (tx_o),
+        .rx_i    (tx_dout)
         );
     
     // use transmitter to send data to the receiver
@@ -97,17 +97,17 @@ module UARTController_tb;
 /* MAIN ***********************************************************************/
     
     initial begin
-        en_i   = 1'b0;
-        we_i   = 1'b0;
-        addr_i = 3'o0;
-        din_i  = 8'h00;
+        en_i     = 1'b0;
+        we_i     = 1'b0;
+        regsel_i = 3'o0;
+        din_i    = 8'h00;
         
         // set BRG = 0x0001
         #1;
-        en_i   = 1'b1;
-        we_i   = 1'b1;
-        addr_i = 3'o1;
-        din_i  = 8'h01;
+        en_i     = 1'b1;
+        we_i     = 1'b1;
+        regsel_i = 3'o1;
+        din_i    = 8'h01;
         @(posedge clk_i);
         
         #1;
@@ -116,10 +116,10 @@ module UARTController_tb;
         @(posedge clk_i);
         
         #1;
-        en_i = 1'b1;
-        we_i = 1'b1;
-        addr_i = 3'o2;
-        din_i  = 8'h00;
+        en_i     = 1'b1;
+        we_i     = 1'b1;
+        regsel_i = 3'o2;
+        din_i    = 8'h00;
         @(posedge clk_i);
         
         #1;
@@ -129,10 +129,10 @@ module UARTController_tb;
         
         // transmit 0x75
         #1;
-        en_i   = 1'b1;
-        we_i   = 1'b1;
-        addr_i = 3'o3;
-        din_i  = 8'h75;
+        en_i     = 1'b1;
+        we_i     = 1'b1;
+        regsel_i = 3'o3;
+        din_i    = 8'h75;
         @(posedge clk_i);
         
         #1;
@@ -151,8 +151,8 @@ module UARTController_tb;
         
         // wait for complete transmission
         #1;
-        en_i   = 1'b1;
-        addr_i = 3'o0;
+        en_i     = 1'b1;
+        regsel_i = 3'o0;
         @(posedge clk_i);
         
         // delay for read
@@ -172,8 +172,8 @@ module UARTController_tb;
         
         //read received byte        
         #1;
-        en_i = 1'b1;
-        addr_i = 3'o4;
+        en_i     = 1'b1;
+        regsel_i = 3'o4;
         @(posedge clk_i);
         
         #1;

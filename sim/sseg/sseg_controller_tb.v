@@ -37,7 +37,7 @@ module SevenSegmentController_tb;
     reg       clk_i;
     reg       en_i;
     reg       we_i;
-    reg [2:0] addr_i;
+    reg [2:0] regsel_i;
     reg [7:0] din_i;
     
     
@@ -54,7 +54,7 @@ module SevenSegmentController_tb;
         .clk_i   (clk_i),
         .en_i    (en_i),
         .we_i    (we_i),
-        .addr_i  (addr_i),
+        .regsel_i(regsel_i),
         .din_i   (din_i),
         .an_n_o  (an_n_o),
         .sseg_n_o(sseg_n_o)
@@ -79,38 +79,38 @@ module SevenSegmentController_tb;
 /* MAIN ***********************************************************************/
     
     initial begin
-        en_i   = 1'b0;
-        we_i   = 1'b0;
-        addr_i = 3'o0;
-        din_i  = 8'd0;
+        en_i     = 1'b0;
+        we_i     = 1'b0;
+        regsel_i = 3'o0;
+        din_i    = 8'd0;
         
         // write 76543210 to the seven-segment display
         #1;
-        en_i   = 1'b1;
-        we_i   = 1'b1;
-        addr_i = 3'o2;
-        din_i  = 8'h10;
+        en_i     = 1'b1;
+        we_i     = 1'b1;
+        regsel_i = 3'o2;
+        din_i    = 8'h10;
         @(posedge clk_i);
         
         #1;
-        addr_i = 3'o3;
-        din_i  = 8'h32;
+        regsel_i = 3'o3;
+        din_i    = 8'h32;
         @(posedge clk_i);
         
         #1;
-        addr_i = 3'o4;
-        din_i  = 8'h54;
+        regsel_i = 3'o4;
+        din_i    = 8'h54;
         @(posedge clk_i);
         
         #1;
-        addr_i = 3'o5;
-        din_i  = 8'h76;
+        regsel_i = 3'o5;
+        din_i    = 8'h76;
         @(posedge clk_i);
         
         // enable all digits
         #1;
-        addr_i = 3'o0;
-        din_i  = 8'hFF;
+        regsel_i = 3'o0;
+        din_i    = 8'hFF;
         @(posedge clk_i);
         
         // deselect controller bus
@@ -124,10 +124,10 @@ module SevenSegmentController_tb;
         
         // disable first 4 digits
         #1;
-        en_i   = 1'b1;
-        we_i   = 1'b1;
-        addr_i = 3'o0;
-        din_i  = 8'hF0;
+        en_i     = 1'b1;
+        we_i     = 1'b1;
+        regsel_i = 3'o0;
+        din_i    = 8'hF0;
         @(posedge clk_i);
         
         // deselect controller bus

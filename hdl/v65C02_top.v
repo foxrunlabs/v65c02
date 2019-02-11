@@ -19,9 +19,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /*******************************************************************************
 Module Name : v65C02_Top
-Dependences : ClockGen, CPUReset, cpu_65c02, RAM_32K8, ROM_16K8, VGAController,
-            : SevenSegmentController, UARTController
 File Name   : v65C02_top.v
+Dependences : ClockGen, CPUReset, cpu_65c02, RAM_44K8, ROM_16K8, VGAController,
+              SevenSegmentController, UARTController, KeyboardController, 
+              TimerController
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -153,7 +154,7 @@ module v65C02_Top
     
     wire       io_en;
     wire [4:0] port;
-    wire       vga_ctrl_en;
+    wire       vga_reg_en;
     wire       sseg_en;
     wire       uart_en;
     wire       kbd_en;
@@ -166,17 +167,18 @@ module v65C02_Top
     assign port = cpu_addr[7:3] - 5'd20;
     
     // port enables
-    assign vga_ctrl_en = io_en & (port == P_VGA);
-    assign sseg_en     = io_en & (port == P_SSEG);
-    assign uart_en     = io_en & (port == P_UART);
-    assign kbd_en      = io_en & (port == P_KBD);
-    assign tmr_en      = io_en & (port == P_TMR);
+    assign vga_reg_en = io_en & (port == P_VGA);
+    assign sseg_en    = io_en & (port == P_SSEG);
+    assign uart_en    = io_en & (port == P_UART);
+    assign kbd_en     = io_en & (port == P_KBD);
+    assign tmr_en     = io_en & (port == P_TMR);
     
     
 /* VGA CONTROLLER *************************************************************/
     
     wire        vga_vram_en;                // video RAM select
-    wire [7:0]  vga_dout;                   // 8-bit data output
+    wire [7:0]  vga_vram_dout;              // 8-bit video RAM output
+    wire [7:0]  vga_reg_dout;               // 8-bit register output
     wire [11:0] vga_rgb;                    // 12-bit RGB444 output
     wire        vga_hsync;                  // horizontal sync
     wire        vga_vsync;                  // vertical sync
@@ -188,12 +190,16 @@ module v65C02_Top
         (
         .clk_cpu_i  (clk_cpu),
         .clk_pixel_i(clk_pixel),
-        .ctrl_en_i  (vga_ctrl_en),
         .vram_en_i  (vga_vram_en),
-        .we_i       (cpu_we),
-        .addr_i     (cpu_addr[11:0]),
-        .din_i      (cpu_dout),
-        .dout_o     (vga_dout),
+        .vram_we_i  (cpu_we),
+        .vram_addr_i(cpu_addr[11:0]),
+        .vram_din_i (cpu_dout),
+        .vram_dout_o(vga_vram_dout),
+        .reg_en_i   (vga_reg_en),
+        .reg_we_i   (cpu_we),
+        .regsel_i   (cpu_addr[1:0]),
+        .reg_din_i  (cpu_dout),
+        .reg_dout_o (vga_reg_dout),
         .rgb_o      (vga_rgb),
         .hsync_o    (vga_hsync),
         .vsync_o    (vga_vsync)
@@ -215,7 +221,7 @@ module v65C02_Top
         .clk_i   (clk_cpu),
         .en_i    (sseg_en),
         .we_i    (cpu_we),
-        .addr_i  (cpu_addr[2:0]),
+        .regsel_i(cpu_addr[2:0]),
         .din_i   (cpu_dout),
         .an_n_o  (sseg_an_n),
         .sseg_n_o(sseg_sseg_n)
@@ -233,14 +239,14 @@ module v65C02_Top
     
     UARTController UARTController
         (
-        .clk_i (clk_cpu),
-        .en_i  (uart_en),
-        .we_i  (cpu_we),
-        .addr_i(cpu_addr[2:0]),
-        .din_i (cpu_dout),
-        .dout_o(uart_dout),
-        .rx_i  (UART_TXD_IN),
-        .tx_o  (uart_tx)
+        .clk_i   (clk_cpu),
+        .en_i    (uart_en),
+        .we_i    (cpu_we),
+        .regsel_i(cpu_addr[2:0]),
+        .din_i   (cpu_dout),
+        .dout_o  (uart_dout),
+        .rx_i    (UART_TXD_IN),
+        .tx_o    (uart_tx)
         );
     
     // output logic
@@ -257,7 +263,7 @@ module v65C02_Top
         .rst_i      (rst_cpu),
         .en_i       (kbd_en),
         .we_i       (cpu_we),
-        .addr_i     (cpu_addr[2:0]),
+        .regsel_i   (cpu_addr[1:0]),
         .din_i      (cpu_dout),
         .dout_o     (kbd_dout),
         .ps2_clk_io (PS2_CLK),
@@ -271,12 +277,12 @@ module v65C02_Top
     
     TimerController TimerController
         (
-        .clk_i (clk_cpu),
-        .en_i  (tmr_en),
-        .we_i  (cpu_we),
-        .addr_i(cpu_addr[2:0]),
-        .din_i (cpu_dout),
-        .dout_o(tmr_dout)
+        .clk_i   (clk_cpu),
+        .en_i    (tmr_en),
+        .we_i    (cpu_we),
+        .regsel_i(cpu_addr[2:0]),
+        .din_i   (cpu_dout),
+        .dout_o  (tmr_dout)
         );
     
     
@@ -297,15 +303,15 @@ module v65C02_Top
     initial en_p1_reg = 8'h00;
     always @(posedge clk_cpu)
         en_p1_reg <= #1 {tmr_en, kbd_en, uart_en, sseg_en,
-                         vga_ctrl_en, vga_vram_en, ram_en, bios_en};
+                         vga_reg_en, vga_vram_en, ram_en, bios_en};
     
     // v65C02 data input multiplexer
     always @*
         case(en_p1_reg)
             BIOS_EN: cpu_din = bios_dout;
             RAM_EN:  cpu_din = ram_dout;
-            VRAM_EN: cpu_din = vga_dout;
-            VGA_EN:  cpu_din = vga_dout;
+            VRAM_EN: cpu_din = vga_vram_dout;
+            VGA_EN:  cpu_din = vga_reg_dout;
             UART_EN: cpu_din = uart_dout;
             PS2_EN:  cpu_din = kbd_dout;
             TMR_EN:  cpu_din = tmr_dout;

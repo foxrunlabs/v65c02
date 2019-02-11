@@ -24,8 +24,7 @@ Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
-Purpose : 32-bit timer controller for the v65C02 8-bit Computer. Currently
-          operates in one-shot monostable mode.
+Purpose : 32-bit timer controller for the v65C02 8-bit Computer.
 *******************************************************************************/
 
 
@@ -36,7 +35,7 @@ module TimerController
     input  wire       en_i,         // controller bus select
     input  wire       we_i,         // controller bus write enable
     
-    input  wire [2:0] addr_i,       // 3-bit register address
+    input  wire [2:0] regsel_i,     // 3-bit register select
     input  wire [7:0] din_i,        // 8-bit register data input
     output reg  [7:0] dout_o        // 8-bit register data output
     );
@@ -58,7 +57,7 @@ module TimerController
     always @(posedge clk_i)
         if(en_i)
             if(we_i)
-                case(addr_i)
+                case(regsel_i)
                     R_TIMER08: timer_reg <= #1 {timer_reg[31:8], din_i};
                     R_TIMER16: timer_reg <= #1 {timer_reg[31:16], din_i,
                                                 timer_reg[7:0]};
@@ -67,13 +66,13 @@ module TimerController
                     R_TIMER32: timer_reg <= #1 {din_i, timer_reg[23:0]};
                 endcase
     
-    assign timer_rst = en_i & we_i & (addr_i == R_TIMER32);
+    assign timer_rst = en_i & we_i & (regsel_i == R_TIMER32);
     
     // output registers
     initial dout_o = 8'h00;
     always @(posedge clk_i)
         if(en_i)
-            case(addr_i)
+            case(regsel_i)
                 R_STATUS: dout_o <= #1 {7'b0000_000, ovrfl_ff};
                 default:  dout_o <= #1 8'h00;
             endcase

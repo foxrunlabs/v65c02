@@ -37,7 +37,7 @@ module KeyboardController_tb;
     reg       rst_i;
     reg       en_i;
     reg       we_i;
-    reg [2:0] addr_i;
+    reg [1:0] regsel_i;
     reg [7:0] din_i;
     
     
@@ -74,7 +74,7 @@ module KeyboardController_tb;
         .rst_i      (rst_i),
         .en_i       (en_i),
         .we_i       (we_i),
-        .addr_i     (addr_i),
+        .regsel_i   (regsel_i),
         .din_i      (din_i),
         .dout_o     (dout_o),
         .ps2_clk_io (ps2_clk_bus),
@@ -109,23 +109,23 @@ module KeyboardController_tb;
                BREAK   = 8'hf0;
     
     // controller registers
-    localparam STATUS = 3'o0,
-               RXREG  = 3'o1,
-               TXREG  = 3'o2;
+    localparam STATUS = 2'b00,
+               RXREG  = 2'b01,
+               TXREG  = 2'b10;
     
     initial begin
         $display("\nKeyboardController Test Bench");
         
-        rst_i  = 1'b0;
-        en_i   = 1'b0;
-        we_i   = 1'b0;
-        addr_i = 3'o0;
-        din_i  = 8'h00;
+        rst_i    = 1'b0;
+        en_i     = 1'b0;
+        we_i     = 1'b0;
+        regsel_i = 2'b00;
+        din_i    = 8'h00;
         
         // read STATUS register
         #1;
-        en_i   = 1'b1;
-        addr_i = STATUS;
+        en_i     = 1'b1;
+        regsel_i = STATUS;
         @(posedge clk_i);
         
         #1;
@@ -153,8 +153,8 @@ module KeyboardController_tb;
         
         // read the STATUS register and wait until there is a scan code ready
         #1;
-        en_i   = 1'b1;
-        addr_i = STATUS;
+        en_i     = 1'b1;
+        regsel_i = STATUS;
         @(posedge clk_i);
         
         while(~dout_o[0])
@@ -164,7 +164,7 @@ module KeyboardController_tb;
         
         // read RXREG
         #1;
-        addr_i = RXREG;
+        regsel_i = RXREG;
         @(posedge clk_i);
         
         // wait for output to register
@@ -174,7 +174,7 @@ module KeyboardController_tb;
         
         // read STATUS again
         #1;
-        addr_i = STATUS;
+        regsel_i = STATUS;
         @(posedge clk_i);
         
         #1;
@@ -196,8 +196,8 @@ module KeyboardController_tb;
         
         // read the STATUS register and wait until shift key is registered
         #1;
-        en_i   = 1'b1;
-        addr_i = STATUS;
+        en_i     = 1'b1;
+        regsel_i = STATUS;
         @(posedge clk_i);
         
         while(~dout_o[4])
@@ -225,8 +225,8 @@ module KeyboardController_tb;
         
         // read STATUS register
         #1;
-        en_i   = 1'b1;
-        addr_i = STATUS;
+        en_i     = 1'b1;
+        regsel_i = STATUS;
         @(posedge clk_i);
         
         // wait for output to register
@@ -237,7 +237,7 @@ module KeyboardController_tb;
         
         // read RXREG
         #1;
-        addr_i = RXREG;
+        regsel_i = RXREG;
         @(posedge clk_i);
         
         // wait for output to register
@@ -247,7 +247,7 @@ module KeyboardController_tb;
         
         // read STATUS register
         #1;
-        addr_i = STATUS;
+        regsel_i = STATUS;
         @(posedge clk_i);
         
         // wait for output to register
@@ -261,10 +261,10 @@ module KeyboardController_tb;
         // simulate host-to-device communication
         $write("Sending command to host... ");
         #1;
-        en_i   = 1'b1;
-        we_i   = 1'b1;
-        addr_i = TXREG;
-        din_i  = SET_LED;
+        en_i     = 1'b1;
+        we_i     = 1'b1;
+        regsel_i = TXREG;
+        din_i    = SET_LED;
         @(posedge clk_i);
         
         #1;
@@ -275,8 +275,8 @@ module KeyboardController_tb;
         
         // read STATUS register
         #1;
-        en_i   = 1'b1;
-        addr_i = STATUS;
+        en_i     = 1'b1;
+        regsel_i = STATUS;
         @(posedge clk_i);
         
         #1;
@@ -290,8 +290,8 @@ module KeyboardController_tb;
         
         // read STATUS register
         #1;
-        en_i   = 1'b1;
-        addr_i = STATUS;
+        en_i     = 1'b1;
+        regsel_i = STATUS;
         @(posedge clk_i);
         
         #1;

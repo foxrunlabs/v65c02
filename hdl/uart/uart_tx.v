@@ -19,18 +19,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /*******************************************************************************
 Module Name : UART_TX
-Parent      : UARTController
 File Name   : uart_tx.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
 Purpose : UART Transmitter module for the v65C02 8-bit Computer.
-
-          Preset for 8-N-1. Baud rate is determined by Fosc / [16 * (BRG + 1)].
-          Transmission starts after 8-bit data is written to the transmit shift
-          register. The busy flag is high while the module is shifting the data
-          out. 
 *******************************************************************************/
 
 

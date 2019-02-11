@@ -19,31 +19,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /*******************************************************************************
 Module Name : UARTController
-Dependences : UART_TX, UART_RX
 File Name   : uart_controller.v
+Dependences : UART_TX, UART_RX
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
-Purpose : UART controller for the v65C02 8-bit Computer on the Nexys 4 DDR FPGA
-          development board.
-          
-          The controller has four registers: STATUS, BRGL, BRGH, TXREG, RXREG.
-          The STATUS register contains the status and control bits for the UART.
-          BRGL and BRGH make up the 16-bit Baud Rate Generator. TXREG is the
-          data register for transmitted data and RXREG is the received data.
-          
-                 ---------------------------------------------------------------
-                    7   |   6   |   5   |   4   |   3   |   2   |   1   |   0
-                 ---------------------------------------------------------------
-          STATUS    X   |   X   |   X   |   X   |   X   |   X   | RXFULL| TXBUSY
-          BRGL    BRG7  | BRG6  | BRG5  | BRG4  | BRG3  | BRG2  | BRG1  |  BRG0
-          BRGH    BRG15 | BRG14 | BRG13 | BRG12 | BRG11 | BRG10 | BRG9  |  BRG8
-          TXREG     D7  |   D6  |   D5  |   D4  |   D3  |   D2  |  D1   |   D0
-          
-          Baud rate is determine by the following equation:
-          
-            Baud Rate = Fosc / [16 * (BRG + 1)]            
+Purpose : UART controller for the v65C02 8-bit Computer.        
 *******************************************************************************/
 
 
@@ -54,7 +36,7 @@ module UARTController
     input  wire       en_i,         // control bus select
     input  wire       we_i,         // write enable
     
-    input  wire [2:0] addr_i,       // 3-bit register address
+    input  wire [2:0] regsel_i,     // 3-bit register select
     input  wire [7:0] din_i,        // 8-bit register data input
     output wire [7:0] dout_o,       // 8-bit register data output
     
@@ -96,7 +78,7 @@ module UARTController
     always @(posedge clk_i)
         if(en_i)
             if(we_i)
-                case(addr_i)
+                case(regsel_i)
                     BRGL:   brgl_reg <= #1 din_i;
                     BRGH:   brgh_reg <= #1 din_i;
                 endcase
@@ -105,7 +87,7 @@ module UARTController
     initial dout_reg = 8'h00;
     always @(posedge clk_i)
         if(en_i)
-            case(addr_i)
+            case(regsel_i)
                 STATUS:  dout_reg <= #1 {6'b0000_00, rx_full_ff, tx_busy};
                 RXREG:   dout_reg <= #1 rxdata_reg;
                 default: dout_reg <= #1 8'h00;
@@ -137,7 +119,7 @@ module UARTController
     wire tx_dout;                   // serial data output
     wire tx_busy;                   // transmit busy
     
-    assign tx_we = en_i & we_i & (addr_i == TXREG);
+    assign tx_we = en_i & we_i & (regsel_i == TXREG);
     
     UART_TX UART_TX
         (
@@ -183,7 +165,7 @@ module UARTController
             rx_full_ff <= #1 1'b1;
         else
             if(en_i)
-                if(addr_i == RXREG)
+                if(regsel_i == RXREG)
                     rx_full_ff <= #1 1'b0;      // reset on read
     end
     

@@ -19,7 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /*******************************************************************************
 Module Name : PS2_TX
-Parent:     : PS2Transceiver
 File Name   : ps2_tx.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke

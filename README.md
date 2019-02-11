@@ -9,8 +9,8 @@ Verilog and 65C02 assembler source to implement an 8-bit computer on the [Digile
         * 16-bit address bus
         * 8-bit data bus
 * Memory
-    * 32K x 8-bit RAM
-        * 8x 36Kb Xilinx Block RAM
+    * 44K x 8-bit RAM
+        * 10x 36Kb Xilinx Block RAM
     * 16K x 8-bit ROM
         * 4x 36Kb Xilinx Block RAM
 * Graphics
@@ -21,8 +21,7 @@ Verilog and 65C02 assembler source to implement an 8-bit computer on the [Digile
     * 4K x 8-bit Character ROM
         * 1x 36Kb Xilinx Block RAM
 * PS/2 Keyboard
-* Serial Port
-    * User Configurable UART
+* UART
 * 32-bit Timer
 
 The user must generate the system and pixel clocks in the top-level module using the Xilinx Clocking Wizard. Due to copyright restrictions, the clock IP is not included with this repository.

@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /*******************************************************************************
 Module Name : KeyboardController
 File Name   : kbd_controller.v
+Dependences : PS2Transceiver
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -36,7 +37,7 @@ module KeyboardController
     input  wire       en_i,         // controller bus select
     input  wire       we_i,         // write enable
     
-    input  wire [2:0] addr_i,       // 3-bit register address
+    input  wire [1:0] regsel_i,     // 2-bit register select
     input  wire [7:0] din_i,        // 8-bit register data input
     output wire [7:0] dout_o,       // 8-bit register data output
     
@@ -47,9 +48,9 @@ module KeyboardController
     
 /* CONTROLLER REGISTERS *******************************************************/
     
-    localparam STATUS = 3'o0,
-               RXREG  = 3'o1,
-               TXREG  = 3'o2;
+    localparam STATUS = 2'b00,
+               RXREG  = 2'b01,
+               TXREG  = 2'b10;
     
     wire [7:0] status;              // STATUS register bits
     wire       shift;               // combination of left and right shift keys
@@ -63,7 +64,7 @@ module KeyboardController
     initial dout_reg = 8'h00;
     always @(posedge clk_i)
         if(en_i)
-            case(addr_i)
+            case(regsel_i)
                 STATUS:  dout_reg <= #1 status;
                 RXREG:   dout_reg <= #1 rxreg_reg;
                 default: dout_reg <= #1 8'h00;
@@ -82,7 +83,7 @@ module KeyboardController
     wire       rx_err;                  // receive error
     wire [7:0] rx_data;                 // received data
     
-    assign tcvr_we = en_i & we_i & (addr_i == TXREG);
+    assign tcvr_we = en_i & we_i & (regsel_i == TXREG);
     
     PS2Transceiver PS2Transceiver
         (
@@ -258,7 +259,7 @@ module KeyboardController
     reg  data_rdy_ns;
     
     assign data_rdy_set = rxreg_en;                     // same criteria
-    assign data_rdy_rst = en_i & (addr_i == RXREG);     // receive register read
+    assign data_rdy_rst = en_i & (regsel_i == RXREG);     // receive register read
     
     // set if data ready, clear if RXREG is read
     initial data_rdy_ff = 1'b0;

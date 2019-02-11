@@ -19,15 +19,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /*******************************************************************************
 Module Name : RAM_44K8
-Top Module  : v65C02_Top
 File Name   : ram_44k8.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
-Purpose : 44K x 8-bit write-first RAM for the v65C02 8-bit Computer.
-          
-          All outputs are registered for a one clock cycle delay.
+Purpose : 44K x 8-bit write-first synchronous RAM for the v65C02 8-bit Computer.
 *******************************************************************************/
 
 

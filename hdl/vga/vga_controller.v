@@ -19,9 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /*******************************************************************************
 Module Name : VGAController
+File Name   : vga_controller.v
 Dependences : CRTC, RAM_4K8_2K16, CharacterGenerator, ROM_4K8,
               AttributeDecoder, Synchronizer
-File Name   : vga_controller.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -86,16 +86,22 @@ Purpose : VGA text-mode controller for the v65C02 8-bit Computer on the
 
 module VGAController
     (
-    input wire         clk_cpu_i,   // CPU clock
-    input wire         clk_pixel_i, // pixel clock
+    input  wire        clk_cpu_i,   // CPU clock
+    input  wire        clk_pixel_i, // pixel clock
     
-    // VGA bus
-    input wire         ctrl_en_i,   // control register enable
-    input wire         vram_en_i,   // video RAM enable
-    input wire         we_i,        // write enable
-    input wire  [11:0] addr_i,      // 12-bit address
-    input wire  [7:0]  din_i,       // 8-bit data input
-    output reg  [7:0]  dout_o,      // 8-bit data ouput
+    // video RAM
+    input  wire        vram_en_i,   // video RAM enable
+    input  wire        vram_we_i,   // video RAM write enable
+    input  wire [11:0] vram_addr_i, // 12-bit video RAM address
+    input  wire [7:0]  vram_din_i,  // 8-bit video RAM data input
+    output wire [7:0]  vram_dout_o, // 8-bit video RAM data output
+    
+    // registers
+    input  wire        reg_en_i,    // registers enable
+    input  wire        reg_we_i,    // registers write enable
+    input  wire [1:0]  regsel_i,    // 2-bit register select
+    input  wire [7:0]  reg_din_i,   // 8-bit register data input
+    output reg  [7:0]  reg_dout_o,  // 8-bit register data output
     
     // outputs
     output wire [11:0] rgb_o,       // RGB444 output
@@ -106,36 +112,39 @@ module VGAController
     
 /* CONTROL REGISTERS **********************************************************/
     
+    localparam R_STATUS = 2'b00,
+               R_CURSL  = 2'b01,
+               R_CURSH  = 2'b10;
+    
     reg  [1:0]  status_reg;         // STATUS
     reg  [7:0]  curs_lsb_reg;       // CURS_LSB
     reg  [2:0]  curs_msb_reg;       // CURS_MSB
     wire [10:0] curs_addr;          // 11-bit cursor address
-    reg  [7:0]  ctrl_data_reg;      // control register output
     
     assign curs_addr = {curs_msb_reg, curs_lsb_reg};
     
     // control registers input
     initial status_reg   = 2'b00;   // cursor disabled, output disabled
     initial curs_lsb_reg = 8'd0;    // cursor at (0,0)
-    initial curs_msb_reg = 3'd0;
+    initial curs_msb_reg = 3'o0;
     always @(posedge clk_cpu_i)
-        if(ctrl_en_i)
-            if(we_i)
-                case(addr_i[2:0])
-                    3'o0: status_reg   <= #1 din_i[1:0];
-                    3'o1: curs_lsb_reg <= #1 din_i;
-                    3'o2: curs_msb_reg <= #1 din_i[2:0];
+        if(reg_en_i)
+            if(reg_we_i)
+                case(regsel_i)
+                    R_STATUS: status_reg   <= #1 reg_din_i[1:0];
+                    R_CURSL:  curs_lsb_reg <= #1 reg_din_i;
+                    R_CURSH:  curs_msb_reg <= #1 reg_din_i[2:0];
                 endcase
     
     // control registers output
-    initial ctrl_data_reg = 8'd0;
+    initial reg_dout_o = 8'h00;
     always @(posedge clk_cpu_i)
-        if(ctrl_en_i)
-            case(addr_i[2:0])
-                3'o0:    ctrl_data_reg <= #1 {6'b0000_00, status_reg};
-                3'o1:    ctrl_data_reg <= #1 curs_lsb_reg;
-                3'o2:    ctrl_data_reg <= #1 {5'b0000_0, curs_msb_reg};
-                default: ctrl_data_reg <= #1 8'd0;
+        if(reg_en_i)
+            case(regsel_i)
+                R_STATUS: reg_dout_o <= #1 {6'b0000_00, status_reg};
+                R_CURSL:  reg_dout_o <= #1 curs_lsb_reg;
+                R_CURSH:  reg_dout_o <= #1 {5'b0000_0, curs_msb_reg};
+                default:  reg_dout_o <= #1 8'd0;
             endcase
     
     
@@ -167,7 +176,6 @@ module VGAController
     wire [4:0]  char_row;           // character row
     wire [10:0] vga2vram_addr;      // VGA controller to video RAM address
     wire [15:0] vram2vga_data;      // video RAM to VGA controller data
-    wire [7:0]  vram2cpu_data;      // video RAM to v65C02 data
     
     // character row equals scan line mod 16
     assign char_row = crtc_line[8:4];
@@ -180,10 +188,10 @@ module VGAController
         (
         .clka_i (clk_cpu_i),
         .ena_i  (vram_en_i),
-        .wea_i  (we_i),
-        .addra_i(addr_i),
-        .dia_i  (din_i),
-        .doa_o  (vram2cpu_data),
+        .wea_i  (vram_we_i),
+        .addra_i(vram_addr_i),
+        .dia_i  (vram_din_i),
+        .doa_o  (vram_dout_o),
         .clkb_i (clk_pixel_i),
         .enb_i  (crtc_col_stb),
         .addrb_i(vga2vram_addr),
@@ -287,28 +295,5 @@ module VGAController
     assign rgb_o   = sync_rgb;
     assign hsync_o = sync_hsync;
     assign vsync_o = sync_vsync;
-    
-    
-/* VGA BUS OUTPUT LOGIC *******************************************************/
-    
-    reg ctrl_en_p1_ff;              // control register enable pipeline
-    reg vram_en_p1_ff;              // video RAM enable pipeline
-    
-    initial ctrl_en_p1_ff = 1'b0;
-    initial vram_en_p1_ff = 1'b0;
-    always @(posedge clk_cpu_i) begin
-        ctrl_en_p1_ff <= #1 ctrl_en_i;
-        vram_en_p1_ff <= #1 vram_en_i;
-    end
-    
-    // VGA bus data output multiplexer
-    always @* begin
-        dout_o = 8'd0;
-        
-        if(ctrl_en_p1_ff)
-            dout_o = ctrl_data_reg;
-        if(vram_en_p1_ff)
-            dout_o = vram2cpu_data;
-    end
     
 endmodule

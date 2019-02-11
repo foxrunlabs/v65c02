@@ -19,13 +19,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /*******************************************************************************
 Module Name : HexToSSEG
-Top Module  : SevenSegmentController
 File Name   : hex_to_sseg.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
-Purpose : Hexadecimal to seven-segment display converter.
+Purpose : Hexadecimal to seven-segment display converter for the v65C02 8-bit
+          Computer.
           
           The output is ordered from cathode A to G from bit 0 to bit 6, with
           the decimal point DP at bit 7.
