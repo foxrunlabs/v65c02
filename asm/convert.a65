@@ -164,35 +164,32 @@ htou16:     stx     HSTRH
 ;
 ; Destroys: DSTR
 ;
-; Cycles (jsr->rts): 
+; Cycles (jsr->rts): 51
 
 .CODE
 
-u8toh:      pha                         ; save input
+u8toh:      tax
             
-            lsr     A                   ; high nibble first
+            sed
             lsr     A
             lsr     A
             lsr     A
-            ora     #'0'                ; map 0-9 to "0"-"9"
-            cmp     #'9'+1              ; check if "0"-"9"
-            bcc     @lonibble           ; yes? go to the low nibble
+            lsr     A
+            cmp     #$0A
+            adc     #$30
+            sta     DSTR
             
-            adc     #6                  ; map to "A"-"F"
-@lonibble:  sta     DSTR                ; store first hex digit
+            txa
+            and     #$0F
+            cmp     #$0A
+            adc     #$30
+            sta     DSTR+1
+            cld
             
-            pla                         ; restore input
-            and     #$0F                ; low nibble
-            ora     #'0'                ; map 0-9 to "0"-"9"
-            cmp     #'9'+1              ; check if "0"-"9"
-            bcc     @done               ; yes? done.
+            stz     DSTR+2
             
-            adc     #6                  ; map to "A"-"F"
-@done:      sta     DSTR+1              ; store second hex digit
-            stz     DSTR+2              ; NUL terminator
-            
-            ldx     #$00                ; &hexstring<15:8>
-            lda     #DSTR               ; &hexstring<7:0>
+            ldx     #$00
+            lda     #DSTR
             
             rts
 

@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - v65C02 IP core changed to maximize RAM use. IO devices now between $BFA0-$BFFF, video RAM between $B000-$BF9F, and program RAM between $0200-$AFFF (44 KiB total). Limited to 12 IO devices, with 8 registers each. This removed the individual digit registers for the SSEG.
 - Updated peripherals to reference register select lines, vice address lines. Split the register and VRAM lines in the VGA controller.
 - Updated test benches to reflect changes.
+- Refactored u8t0h for efficiency. Now 51 vs 56-58 cycles.
 ### Fixed
 - Fixed issue in htou8 routine. If high byte invalid, routine would not clear stack, resulting in crash.
 
