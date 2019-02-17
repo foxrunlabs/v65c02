@@ -28,14 +28,10 @@
 
 .PC02
 
-.INCLUDE    "conio.inc"
-.INCLUDE    "keyboard.inc"
-.INCLUDE    "memory.inc"
-.INCLUDE    "uart.inc"
+.INCLUDE    "bios.inc"
 
 .IMPORT     bios_lo
 .IMPORT     bios_hi
-.IMPORT     clrscr
 .IMPORT     cputs
 .IMPORT     gotoxy
 .IMPORT     keymap
@@ -48,6 +44,8 @@
 ;= CONSTANTS ===================================================================
 
 .DEFINE     VERSION "1.1.1-alpha"
+
+ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
 
 
 ;= BIOS ENTRY POINT ============================================================
@@ -87,13 +85,38 @@ start:      lda     #$AA                ; verify RAM by checking zero page
 
 main:       cli                         ; enable interrupts
             
-            ; VGA initialization
+            ;- clear the screen ------------------------------------------------
             stz     VGA_STATUS          ; disable VGA and cursor
-            jsr     clrscr              ; clear the screen
+            
+            lda     #.HIBYTE(VRAM_END)
+            sta     VRAMH
+            lda     #.LOBYTE(VRAM_END)
+            sta     VRAML               ; (VRAM) = VRAM end address
+            
+@clrscr:    lda     #ATTRIB             ; A = attribute
+            sta     (VRAM)              ; store attribute to VRAM
+            dec     VRAML               ; decrement VRAM address LSB
+            lda     #NUL                ; A = NUL
+            sta     (VRAM)              ; store NUL to VRAM
+            dec     VRAML               ; decrement VRAM address LSB
+            lda     VRAML               ; A = VRAM address LSB
+            cmp     #$FF                ; VRAML == $FF?
+            bne     @clrscr             ; no, loop
+            
+            dec     VRAMH               ; decrement VRAM address MSB
+            lda     VRAMH               ; A = VRAM address MSB
+            cmp     #.HIBYTE(VRAM_START)-1
+            bne     @clrscr             ; VRAM address MSB >= start? loop
+            
+            stz     VGA_CURSH
+            stz     VGA_CURSL           ; set cursor to (0,0)
+            stz     COL
+            stz     ROW                 ; update stored cursor coordinates
+            
             lda     #VGA_EN             ; VGA enabled, cursor disabled
             sta     VGA_STATUS          ; write new status register
             
-            ; SSEG initialization
+            ;- SSEG initialization ---------------------------------------------
             stz     SSEG_DIGITS
             stz     SSEG_DP
             stz     SSEG_BYTE0
@@ -101,7 +124,7 @@ main:       cli                         ; enable interrupts
             stz     SSEG_BYTE2
             stz     SSEG_BYTE3
             
-            ; copy BIOS routine table addresses to zero page location
+            ; BIOS routine table -----------------------------------------------
             lda     #.LOBYTE(bios_lo)
             sta     BIOSLO
             lda     #.HIBYTE(bios_lo)
@@ -124,7 +147,7 @@ main:       cli                         ; enable interrupts
             lda     #.LOBYTE(copyright)
             jsr     cputs               ; copyright
             
-            ; compute total RAM installed
+            ;- compute RAM -----------------------------------------------------
             ldx     #0
             lda     #3
             jsr     gotoxy              ; move cursor to (0,3)
@@ -158,7 +181,7 @@ main:       cli                         ; enable interrupts
             lda     #.LOBYTE(bytes)
             jsr     cputs               ; bytes string
             
-            ; UART initialization    
+            ;- UART initialization ---------------------------------------------
             lda     #.HIBYTE(B115200)
             sta     UART_BRGH
             lda     #.LOBYTE(B115200)
@@ -172,7 +195,7 @@ main:       cli                         ; enable interrupts
             lda     #.LOBYTE(uart)
             jsr     cputs               ; UART setting string
             
-            ; keyboard detection
+            ;- keyboard detection ----------------------------------------------
             ldx     #0
             lda     #5
             jsr     gotoxy              ; move cursor to (0,5)
@@ -206,6 +229,7 @@ main:       cli                         ; enable interrupts
             lda     #.LOBYTE(ok)
             jsr     cputs               ; OK string
             
+            ;- monitor ---------------------------------------------------------
             ldx     #0
             lda     #7
             jsr     gotoxy              ; move cursor to (0,7)

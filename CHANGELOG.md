@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Updated peripherals to reference register select lines, vice address lines. Split the register and VRAM lines in the VGA controller.
 - Updated test benches to reflect changes.
 - Refactored u8t0h for efficiency. Now 51 vs 56-58 cycles.
+- Complete rewrite of BIOS and monitor.
 ### Fixed
 - Fixed issue in htou8 routine. If high byte invalid, routine would not clear stack, resulting in crash.
 

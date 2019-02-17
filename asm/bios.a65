@@ -1,0 +1,503 @@
+;===============================================================================
+;Copyright (C) 2018 Ryan Clarke
+;
+;This program is free software (firmware): you can redistribute it and/or modify
+;it under the terms of the GNU General Public License as published by
+;the Free Software Foundation, either version 3 of the License, or
+;(at your option) any later version.
+;
+;This program is distributed in the hope that it will be useful,
+;but WITHOUT ANY WARRANTY; without even the implied warranty of
+;MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;GNU General Public License for more details.
+;
+;You should have received a copy of the GNU General Public License
+;along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;===============================================================================
+
+;===============================================================================
+; Program   : v65C02 BIOS
+; File Name : bios.a65
+; Project   : v65C02 8-bit Computer
+; Author    : Ryan Clarke
+; E-mail    : kj6msg@icloud.com
+;===============================================================================
+; Purpose : v65C02 8-bit Computer BIOS.
+;===============================================================================
+
+
+.PC02
+
+.INCLUDE    "bios.inc"
+
+.IMPORT     __VRAM_START__
+.IMPORT     __VRAM_SIZE__
+
+.IMPORT     monitor
+
+
+;= CONSTANTS ===================================================================
+
+.DEFINE     VERSION "2.0.0-alpha"       ; version number
+
+ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
+
+
+;===============================================================================
+; BIOS ENTRY POINT
+;===============================================================================
+
+.CODE
+            ;- zero page check -------------------------------------------------
+start:      lda     #$AA                ; verify RAM by checking zero page
+            sta     $FF                 ; store $AA to $00FF
+            lda     $FF                 ; read $00FF
+            cmp     #$AA                ; compare with $AA
+            bne     @no_ram             ; $00FF != $AA?
+            
+            ;- stack check -----------------------------------------------------
+            pha                         ; now check the stack by pushing $AA
+            pla                         ; pull the pushed value
+            cmp     #$AA                ; compare with $AA
+            beq     init                ; pushed/pulled == $AA?
+            
+            ;- no RAM installed ------------------------------------------------
+@no_ram:    brk                         ; fatal error
+            .BYTE $01                   ; code 01 - no RAM
+            
+            ;- initialize system -----------------------------------------------
+init:       stz     VGA_STATUS          ; disable VGA and cursor
+            
+            lda     #.HIBYTE(__VRAM_START__ + __VRAM_SIZE__ - 1)
+            sta     VRAMH
+            lda     #.LOBYTE(__VRAM_START__ + __VRAM_SIZE__ - 1)
+            sta     VRAML               ; (VRAM) = VRAM end address
+            
+@clrscr:    lda     #ATTRIB             ; A = attribute
+            sta     (VRAM)              ; store attribute to VRAM
+            dec     VRAML               ; decrement VRAM address LSB
+            lda     #NUL                ; A = NUL
+            sta     (VRAM)              ; store NUL to VRAM
+            dec     VRAML               ; decrement VRAM address LSB
+            lda     VRAML               ; A = VRAM address LSB
+            cmp     #$FF                ; VRAML == $FF?
+            bne     @clrscr             ; no, loop
+            
+            dec     VRAMH               ; decrement VRAM address MSB
+            lda     VRAMH               ; A = VRAM address MSB
+            cmp     #.HIBYTE(__VRAM_START__ - 1)
+            bne     @clrscr             ; VRAM address MSB >= start? loop
+            
+            stz     VGA_CURSH
+            stz     VGA_CURSL           ; set cursor to (0,0)
+            stz     COL
+            stz     ROW                 ; update stored cursor coordinates
+            
+            lda     #VGA_EN             ; VGA enabled, cursor disabled
+            sta     VGA_STATUS          ; write new status register
+            
+            ;- SSEG initialization ---------------------------------------------
+            stz     SSEG_DIGITS
+            stz     SSEG_DP
+            stz     SSEG_BYTE0
+            stz     SSEG_BYTE1
+            stz     SSEG_BYTE2
+            stz     SSEG_BYTE3
+            
+            ;- BIOS call table address -----------------------------------------
+            lda     #.LOBYTE(bios_tbl_l)
+            sta     BIOSTLL
+            lda     #.HIBYTE(bios_tbl_l)
+            sta     BIOSTLH
+            lda     #.LOBYTE(bios_tbl_h)
+            sta     BIOSTHL
+            lda     #.HIBYTE(bios_tbl_h)
+            sta     BIOSTHH
+            
+            ;- keyboard map address --------------------------------------------
+            lda     #.LOBYTE(keymap)
+            sta     KEYMAPL
+            lda     #.HIBYTE(keymap)
+            sta     KEYMAPH
+            lda     #.LOBYTE(keymapsh)
+            sta     KEYMAPSHL
+            lda     #.HIBYTE(keymapsh)
+            sta     KEYMAPSHH
+            
+            ;- print headers to the screen -------------------------------------
+            ldx     #.HIBYTE(bios_ver)
+            lda     #.LOBYTE(bios_ver)
+            jsr     puts                ; BIOS header
+            
+            ldx     #.HIBYTE(copyright)
+            lda     #.LOBYTE(copyright)
+            jsr     puts                ; copyright
+            
+            lda     #LF
+            jsr     putch
+            
+            ldx     #.HIBYTE(nodisk)
+            lda     #.LOBYTE(nodisk)
+            jsr     puts                ; no disk message
+            
+            ldx     #.HIBYTE(loading)
+            lda     #.LOBYTE(loading)
+            jsr     puts                ; loading ROM monitor message
+            
+            ;- transfer to ROM monitor -----------------------------------------
+            jmp     monitor             ; ROM monitor program
+
+
+;===============================================================================
+; BIOS CALL ROUTINES
+;===============================================================================
+
+;= #0 SOFTRST ==================================================================
+; Soft reset. Sets/resets the appropriate flags and jumps to the reset vector.
+;
+; Parameters: none
+; Returns:    none
+
+.CODE
+
+.proc softrst
+            
+            cld                         ; clear decimal flag
+            sei                         ; set interrupt disable flag
+            jmp     reset               ; go to reset vector
+            
+.endproc
+
+
+;= #1 PUTCH ====================================================================
+; Prints a character to the screen. Updates the cursor position after printing.
+;
+; Parameters: A = character
+; Returns:    none
+;
+; Destroys: X, VRAML, VRAMH, CTAB
+;
+; Cycles (jsr->rts): 63-193
+
+.CODE
+
+.proc putch
+            
+            pha                         ; push character to the stack
+            
+            lda     VGA_CURSH
+            sta     VRAMH
+            lda     VGA_CURSL
+            sta     VRAML               ; (VRAM) = 11-bit cursor address
+            
+            asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
+            rol     VRAMH               ; A = $0001 << 1
+            lda     VRAMH
+            ora     #.HIBYTE(__VRAM_START__)
+            sta     VRAMH               ; (VRAM) = 16-bit VRAM address
+            
+            pla                         ; pull character from the stack
+            cmp     #LF
+            beq     @newline            ; character == LF? newline
+            cmp     #TAB
+            beq     @tab                ; character == TAB? tab
+            
+@printable: sta     (VRAM)              ; write the character to VRAM
+            
+            ldx     COL                 ; X = current column
+            cpx     #79
+            beq     @newline            ; column == 79? newline
+
+            inx                         ; column++
+            lda     ROW                 ; A = current row
+            bra     @cursor             ; update cursor position
+            
+@tab:       lda     COL                 ; A = column
+            cmp     #72
+            bcs     @newline            ; column >= 72
+            
+            and     #%00000111          ; A = column % 8
+            sta     COL8                ; save value into COL8
+            lda     #8
+            sec
+            sbc     COL8                ; A = 8 - (column % 8)
+            clc
+            adc     COL                 ; add to column
+            tax                         ; X = column
+            lda     ROW                 ; A = row
+            bra     @cursor             ; update cursor
+            
+@newline:   lda     ROW
+            cmp     #24
+            beq     @done               ; row == 24? done
+            
+            ldx     #0                  ; column = 0
+            inc     A                   ; row++
+@cursor:    jsr     gotoxy              ; update cursor position
+            
+@done:      rts
+
+.endproc
+
+
+;= #2 PUTS =====================================================================
+; Prints a null terminated string to the screen. Updates the cursor position
+; after printing.
+;
+; Parameters: X = &string<15:8>
+;             A = &string<7:0>
+; Returns:    none
+;
+; Destroys: Y, STRL, STRH
+;
+; Cycles (jsr->rts): 48 - [205 * strlen + 8]
+
+.CODE
+
+.proc puts
+            
+            stx     STRH
+            sta     STRL                ; (STR) = string address
+            
+            ldy     #0                  ; Y = string index
+@loop:      lda     (STR), Y            ; A = string character
+            beq     @done               ; character == NUL? done
+            
+            jsr     putch
+            iny                         ; index++
+            bra     @loop               ; next character
+            
+@done:      rts
+
+.endproc
+
+
+;= #3 GOTOXY ===================================================================
+; Moves the cursor to a screen position.
+;
+; Parameters: X = column
+;             A = row
+; Returns:    none
+;
+; Destroys: CURSL, CURSH, CURST
+;
+; Cycles (jsr->rts): 
+
+.CODE
+
+.proc gotoxy
+            
+            stx     COL
+            sta     ROW                 ; update stored cursor coordinates
+            
+            stx     CURSL
+            stz     CURSH               ; CURS = column (16-bit)
+            stz     CURST               ; CURST,A = row (16-bit)
+            
+            asl     A
+            asl     A
+            asl     A
+            asl     A                   ; don't have to carry until 4th shift
+            rol     CURST               ; CURST,A = row << 4
+            pha                         ; push A
+            
+            clc
+            adc     CURSL
+            sta     CURSL
+            lda     CURSH
+            adc     CURST
+            sta     CURSH               ; CURS = column + (row << 4)
+            
+            pla                         ; CURST,A = row << 4
+            asl     A
+            rol     CURST
+            asl     A
+            rol     CURST               ; CURST,A = row << 6
+            
+            ; VGA cursor address = column + (row << 4) + (row << 6)
+            ; $0000 = column + (row << 4)
+            ; $0002,A = row << 6
+            clc
+            adc     CURSL
+            sta     VGA_CURSL
+            lda     CURSH
+            adc     CURST
+            sta     VGA_CURSH
+            
+@done:      rts
+
+.endproc
+
+
+;===============================================================================
+; INTERRUPTS
+;===============================================================================
+
+;= INTERRUPT VECTORS ===========================================================
+
+.SEGMENT "VECTORS"
+
+            .WORD nmi                   ; $FFFA
+            .WORD reset                 ; $FFFC
+            .WORD irq                   ; $FFFE
+
+
+;= INTERRUPT ROUTINES ==========================================================
+
+.CODE
+
+; non-maskable interrupt
+nmi:        rti
+            
+; hardware reset
+reset:      ldx     #$FF                ; X = $FF
+            txs                         ; initialize the stack pointer at $01FF
+            jmp     start               ; BIOS start point
+            
+; interrupt request
+irq:        pha                         ; save A
+            phx                         ; save X
+            
+            ;- distinguish between IRQ and BRK ---------------------------------
+            tsx                         ; stack pointer -> X
+            lda     $0103, X            ; extract status flags
+            bit     #%00010000          ; B flag set?
+            beq     @exit               ; nope, must be an IRQ
+            
+            lda     $0105, X            ; stack: program counter high bit
+            sta     R1
+            lda     $0104, X            ; stack: program counter low bit
+            sta     R0                  ; (R0) = program counter return location
+            
+            ;- extract BRK padding byte for error code -------------------------
+            sec
+            sbc     #1
+            sta     R0
+            lda     R1
+            sbc     #0
+            sta     R1                  ; (R0) = PC - 1 = error code (pad byte)
+            
+            lda     #$C0                ; display error code on SSEG display
+            sta     SSEG_BYTE3
+            lda     #$DE
+            sta     SSEG_BYTE2
+            lda     (R0)                ; padding byte = error code
+            sta     SSEG_BYTE0
+            lda     #%11110011          ; Bytes 0, 2, and 3 turned on
+            sta     SSEG_DIGITS         ; display "C0DE XX" on SSEG (XX = code)
+            
+@halt:      bra     @halt               ; loop forever
+            
+@exit:      plx
+            pla
+            
+            rti
+
+
+;===============================================================================
+; READ ONLY DATA
+;===============================================================================
+
+;= BIOS CALL TABLE =============================================================
+; 0 - Soft Reset
+; 1 - Print Character
+; 2 - Print Null-terminated String
+; 3 - Set Cursor
+
+.RODATA
+
+bios_tbl_l: .BYTE .LOBYTE(softrst-1)
+            .BYTE .LOBYTE(putch-1)
+            .BYTE .LOBYTE(puts-1)
+            .BYTE .LOBYTE(gotoxy-1)
+
+bios_tbl_h: .BYTE .HIBYTE(softrst-1)
+            .BYTE .HIBYTE(putch-1)
+            .BYTE .HIBYTE(puts-1)
+            .BYTE .HIBYTE(gotoxy-1)
+
+
+;= STRINGS =====================================================================
+
+.RODATA
+
+bios_ver:   .BYTE "v65C02 BIOS v", VERSION, LF, NUL
+copyright:  .BYTE "Copyright (C) 2018 Ryan Clarke", LF, NUL
+nodisk:     .BYTE "Disk not found.", LF, NUL
+loading:    .BYTE "Loading ROM monitor.", LF, NUL
+
+
+;= KEYBOARD MAP ================================================================
+
+.RODATA
+
+keymap:     .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymap08:   .BYTE $00, $00, $00, $00, $00, $09, $60, $00
+keymap10:   .BYTE $00, $00, $00, $00, $00, $71, $31, $00
+keymap18:   .BYTE $00, $00, $7A, $73, $61, $77, $32, $00
+keymap20:   .BYTE $00, $63, $78, $64, $65, $34, $33, $00
+keymap28:   .BYTE $00, $20, $76, $66, $74, $72, $35, $00
+keymap30:   .BYTE $00, $6E, $62, $68, $67, $79, $36, $00
+keymap38:   .BYTE $00, $00, $6D, $6A, $75, $37, $38, $00
+keymap40:   .BYTE $00, $2C, $6B, $69, $6F, $30, $39, $00
+keymap48:   .BYTE $00, $2E, $2F, $6C, $3B, $70, $2D, $00
+keymap50:   .BYTE $00, $00, $27, $00, $5B, $3D, $00, $00
+keymap58:   .BYTE $00, $00, $0A, $5D, $00, $5C, $00, $00
+keymap60:   .BYTE $00, $00, $00, $00, $00, $00, $08, $00
+keymap68:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymap70:   .BYTE $00, $00, $00, $00, $00, $00, $1B, $00
+keymap78:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymap80:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymap88:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymap90:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymap98:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapA0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapA8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapB0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapB8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapC0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapC8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapD0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapD8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapE0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapE8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapF0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapF8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+
+
+;= KEYBOARD MAP (SHIFTED) ======================================================
+
+.RODATA
+
+keymapsh:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapsh08: .BYTE $00, $00, $00, $00, $00, $09, $7E, $00
+keymapsh10: .BYTE $00, $00, $00, $00, $00, $51, $21, $00
+keymapsh18: .BYTE $00, $00, $5A, $53, $41, $57, $40, $00
+keymapsh20: .BYTE $00, $43, $58, $44, $45, $24, $23, $00
+keymapsh28: .BYTE $00, $20, $56, $46, $54, $52, $25, $00
+keymapsh30: .BYTE $00, $4E, $42, $48, $47, $59, $5E, $00
+keymapsh38: .BYTE $00, $00, $4D, $4A, $55, $26, $2A, $00
+keymapsh40: .BYTE $00, $3C, $4B, $49, $4F, $29, $28, $00
+keymapsh48: .BYTE $00, $3E, $3F, $4C, $3A, $50, $5F, $00
+keymapsh50: .BYTE $00, $00, $22, $00, $7B, $2B, $00, $00
+keymapsh58: .BYTE $00, $00, $0A, $7D, $00, $7C, $00, $00
+keymapsh60: .BYTE $00, $00, $00, $00, $00, $00, $08, $00
+keymapsh68: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapsh70: .BYTE $00, $00, $00, $00, $00, $00, $1B, $00
+keymapsh78: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapsh80: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapsh88: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapsh90: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapsh98: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshA0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshA8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshB0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshB8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshC0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshC8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshD0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshD8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshE0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshE8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshF0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+keymapshF8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
