@@ -103,9 +103,8 @@ monitor:    lda     #VGA_CURS           ; CURS bit mask
             inx                         ; next string position
             bra     @getline            ; keep getting characters
             
-@escape:    lda     ROW
-            jsr     clrln               ; clear current line
-            bra     monitor             ; new prompt
+@escape:    jsr     clrln               ; clear current line
+            bra     @prompt             ; new prompt
 
 @backspace: lda     COL                 ; A = current column
             cmp     #1                  ; check if beginning of prompt
@@ -243,33 +242,42 @@ xrecv:      jsr     xmodem
 ;= CLRLN =======================================================================
 ; Clear a line with NUL characters and reset cursor to line beginning.
 ;
-; Parameters: A = line number
+; Parameters: none
 ; Returns:    none
 ;
-; Destroys: X, VRAML, VRAMH
+; Destroys: A, X, VRAML, VRAMH
 
 .CODE
 
 .proc clrln
             
-            pha                         ; save line number
-            
             ldx     #0
-            bios    #3                  ; set cursor to (0,A)
+            lda     ROW
+            bios    #3                  ; set cursor to (0,ROW)
             
+            lda     VGA_CURSH
+            sta     VRAMH
+            lda     VGA_CURSL
+            sta     VRAML               ; (VRAM) = 11-bit cursor address
+            
+            asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
+            rol     VRAMH               ; A = $0001 << 1
+            lda     VRAMH
+            ora     #.HIBYTE(__VRAM_START__)
+            sta     VRAMH               ; (VRAM) = 16-bit VRAM address
+                        
             ldx     #80                 ; 80 columns
-@loop:      phx                         ; save column counter X
+@loop:      lda     #NUL
+            sta     (VRAM)              ; write NUL character
+            inc     VRAML               ; increment RAM address for attribute
+            lda     #ATTRIB
+            sta     (VRAM)              ; write attribute
+            inc     VRAML               ; increment RAM address for next char
+            bne     @next               ; rollover to 00? nope
+            inc     VRAMH               ; VRAML rolled over to 00, increment
             
-            lda     #NUL
-            bios    #1                  ; print NUL to screen
-            
-            plx                         ; restore column counter
-            dex                         ; column counter--
+@next:      dex                         ; column counter--
             bne     @loop               ; 0?
-            
-            ldx     #0
-            pla
-            bios    #3                  ; set cursor to (0,A)
             
             rts
 

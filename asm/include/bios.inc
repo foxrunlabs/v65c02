@@ -104,6 +104,12 @@ KEYMAPSH  = $4D
 KEYMAPSHL = $4D
 KEYMAPSHH = $4E
 
+;- Scrolling -------------------------------------------------------------------
+
+SCROLL  = $4F
+SCROLLL = $4F
+SCROLLH = $50
+
 
 ;= ASCII Character Constants ===================================================
 

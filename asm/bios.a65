@@ -210,7 +210,7 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
 
             inx                         ; column++
             lda     ROW                 ; A = current row
-            bra     @cursor             ; update cursor position
+            bra     @done               ; update cursor position
             
 @tab:       lda     COL                 ; A = column
             cmp     #72
@@ -225,17 +225,22 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
             adc     COL                 ; add to column
             tax                         ; X = column
             lda     ROW                 ; A = row
-            bra     @cursor             ; update cursor
+            bra     @done               ; update cursor
             
 @newline:   lda     ROW
             cmp     #24
-            beq     @done               ; row == 24? done
+            bne     @nextline           ; row == 24? nope
             
-            ldx     #0                  ; column = 0
+            jsr     scrolldn
+            ldx     #0
+            lda     #24
+            bra     @done
+
+@nextline:  ldx     #0                  ; column = 0
             inc     A                   ; row++
-@cursor:    jsr     gotoxy              ; update cursor position
+@done:      jsr     gotoxy              ; update cursor position
             
-@done:      rts
+            rts
 
 .endproc
 
@@ -329,6 +334,63 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
 .endproc
 
 
+;= #4 SCROLLDN =================================================================
+; Scrolls the display down a line.
+;
+; Parameters: none
+; Returns:    none
+;
+; Destroys: 
+
+.CODE
+
+.proc scrolldn
+        
+            lda     #.HIBYTE(__VRAM_START__)
+            sta     VRAMH
+            lda     #.LOBYTE(__VRAM_START__)
+            sta     VRAML               ; (VRAM) = address of (0,0)
+            
+            lda     #.HIBYTE(__VRAM_START__ + 160)
+            sta     SCROLLH
+            lda     #.LOBYTE(__VRAM_START__ + 160)
+            sta     SCROLLL             ; (SCROLL) = address of (0,1)
+            
+@loop0:     lda     (SCROLL)            ; save character from line below
+            sta     (VRAM)              ; copy to line above
+            
+            inc     VRAML
+            bne     @incscroll          ; VRAML++ rollover to 00? nope
+            inc     VRAMH               ; yes, VRAMH++
+            
+@incscroll: inc     SCROLLL
+            bne     @bounds             ; SCROLLL++ rollover to 00? nope
+            inc     SCROLLH             ; yes, SCROLLH++
+            
+            ;- bounds check (SCROLL) against video RAM end ---------------------            
+@bounds:    lda     SCROLLH
+            cmp     #.HIBYTE(__VRAM_START__ + __VRAM_SIZE__)
+            bne     @loop0
+            lda     SCROLLL
+            cmp     #.LOBYTE(__VRAM_START__ + __VRAM_SIZE__)
+            bne     @loop0
+            
+            ;- clear bottom line -----------------------------------------------
+@loop1:     lda     #NUL
+            sta     (VRAM)
+            inc     VRAML
+            lda     #ATTRIB
+            sta     (VRAM)
+            inc     VRAML
+            lda     VRAML
+            cmp     #.LOBYTE(__VRAM_START__ + __VRAM_SIZE__)
+            bne     @loop1    
+            
+            rts
+
+.endproc
+
+
 ;===============================================================================
 ; INTERRUPTS
 ;===============================================================================
@@ -410,11 +472,13 @@ bios_tbl_l: .BYTE .LOBYTE(softrst-1)
             .BYTE .LOBYTE(putch-1)
             .BYTE .LOBYTE(puts-1)
             .BYTE .LOBYTE(gotoxy-1)
+            .BYTE .LOBYTE(scrolldn-1)
 
 bios_tbl_h: .BYTE .HIBYTE(softrst-1)
             .BYTE .HIBYTE(putch-1)
             .BYTE .HIBYTE(puts-1)
             .BYTE .HIBYTE(gotoxy-1)
+            .BYTE .HIBYTE(scrolldn-1)
 
 
 ;= STRINGS =====================================================================
