@@ -63,7 +63,7 @@ monitor:    lda     #VGA_CURS           ; CURS bit mask
             lda     #.LOBYTE(B115200)
             sta     UART_BRGL           ; Initialize UART to 115200 baud
             
-@prompt:    lda     #'>'
+@prompt:    lda     #'-'
             bios    #1                  ; print command prompt
             
             ldx     #0                  ; X = string index
@@ -149,9 +149,9 @@ monitor:    lda     #VGA_CURS           ; CURS bit mask
             
             ; parse command
 @noparams:  lda     INPUT
-            cmp     #'h'
+            cmp     #'?'
             beq     help                ; help command?
-            cmp     #'r'
+            cmp     #'g'
             beq     run                 ; run command?
             cmp     #'x'
             beq     xrecv               ; xmodem command?
@@ -163,7 +163,7 @@ monitor:    lda     #VGA_CURS           ; CURS bit mask
             bra     invalid             ; invalid command
             
 @double:    lda     INPUT
-            cmp     #'w'
+            cmp     #'e'
             beq     write               ; write command?
             bra     invalid             ; invalid command
             
@@ -914,15 +914,17 @@ xrecv:      jsr     xmodem
 
 .RODATA
 
-inv_msg:      .BYTE "invalid command", LF, 0
+inv_msg:    .BYTE "invalid command", LF, 0
 
-help_msg:     .BYTE "dump", TAB, "d address", LF
-help_msg1:    .BYTE "help", TAB, "h", LF
-help_msg2:    .BYTE "run", TAB, "r", LF 
-help_msg3:    .BYTE "write", TAB, "w address byte", LF
-help_msg4:    .BYTE "xmodem", TAB, "x", LF, NUL
+help_msg:   .BYTE "dump", TAB, "D [address]", LF
+            .BYTE "enter", TAB, "E address [byte]", LF
+            .BYTE "go", TAB, "G [address]", LF
+            .BYTE "help", TAB, "?", LF
+            .BYTE "input", TAB, "I device register", LF
+            .BYTE "output", TAB, "O device register byte", LF
+            .BYTE "xmodem", TAB, "X [address]", LF, NUL
 
-timeout_msg:  .BYTE "Timeout", LF, NUL
-fail_msg:     .BYTE "Failed", LF, NUL
+timeout_msg:  .BYTE "timeout", LF, NUL
+fail_msg:     .BYTE "failed", LF, NUL
 complete_msg: .BYTE " bytes received", LF, NUL
-toolarge_msg: .BYTE "File too large", LF, NUL
+toolarge_msg: .BYTE "file too large", LF, NUL

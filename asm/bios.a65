@@ -38,7 +38,7 @@
 
 ;= CONSTANTS ===================================================================
 
-.DEFINE     VERSION "2.0.0-alpha"       ; version number
+.DEFINE     VERSION "2.0.0-alpha."       ; version number
 
 ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
 
@@ -73,14 +73,14 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     #.LOBYTE(__VRAM_START__ + __VRAM_SIZE__ - 1)
             sta     VRAML               ; (VRAM) = VRAM end address
             
-@clrscr:    lda     #ATTRIB             ; A = attribute
+@clrscr:    lda     #ATTRIB             ; A = default text attribute
             sta     (VRAM)              ; store attribute to VRAM
             dec     VRAML               ; decrement VRAM address LSB
             lda     #NUL                ; A = NUL
             sta     (VRAM)              ; store NUL to VRAM
             dec     VRAML               ; decrement VRAM address LSB
             lda     VRAML               ; A = VRAM address LSB
-            cmp     #$FF                ; VRAML == $FF?
+            cmp     #$FF                ; VRAML roll over to $FF?
             bne     @clrscr             ; no, loop
             
             dec     VRAMH               ; decrement VRAM address MSB
@@ -96,6 +96,9 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     #VGA_EN             ; VGA enabled, cursor disabled
             sta     VGA_STATUS          ; write new status register
             
+            lda     #ATTRIB             ; A = default text attribute
+            sta     ATTR                ; save in ATTR
+
             ;- SSEG initialization ---------------------------------------------
             stz     SSEG_DIGITS
             stz     SSEG_DP
@@ -461,10 +464,11 @@ irq:        pha                         ; save A
 ;===============================================================================
 
 ;= BIOS CALL TABLE =============================================================
-; 0 - Soft Reset
-; 1 - Print Character
-; 2 - Print Null-terminated String
-; 3 - Set Cursor
+; 0 - Soft reset
+; 1 - Write character at current cursor
+; 2 - Write string at current cursor
+; 3 - Set cursor position
+; 4 - Scroll screen down one line
 
 .RODATA
 
@@ -485,9 +489,9 @@ bios_tbl_h: .BYTE .HIBYTE(softrst-1)
 
 .RODATA
 
-bios_ver:   .BYTE "v65C02 BIOS v", VERSION, LF, NUL
+bios_ver:   .BYTE "v65C02 BIOS v", VERSION, .STRING(.TIME), LF, NUL
 copyright:  .BYTE "Copyright (C) 2018 Ryan Clarke", LF, NUL
-nodisk:     .BYTE "Disk not found.", LF, NUL
+nodisk:     .BYTE "SD card not found.", LF, NUL
 loading:    .BYTE "Loading ROM monitor.", LF, NUL
 
 
