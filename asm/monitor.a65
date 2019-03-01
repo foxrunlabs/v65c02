@@ -255,12 +255,10 @@ dump:       ;- save snapshot of memory -----------------------------------------
             
             ;- print address ---------------------------------------------------
             lda     ADDRH               ; MSB first
-            jsr     u8toh               ; unsigned byte to hex
-            bios    #2                  ; print MSB
+            jsr     printhex            ; print to screen
             
             lda     ADDRL               ; LSB next
-            jsr     u8toh               ; unsigned byte to hex
-            bios    #2                  ; print LSB
+            jsr     printhex            ; print to screen
             
             lda     #':'
             bios    #1                  ; print ':'
@@ -270,10 +268,9 @@ dump:       ;- save snapshot of memory -----------------------------------------
             ;- print bytes -----------------------------------------------------
             ldy     #0                  ; Y = offset
 @bytes:     lda     BUF, Y              ; A = data
-            jsr     u8toh               ; convert hexadecimal string
             
-            phy                         ; save offset
-            bios    #2                  ; print hexadecimal string
+            phy
+            jsr     printhex
             lda     #' '
             bios    #1                  ; print space
             ply                         ; reset offset
@@ -325,7 +322,29 @@ dump:       ;- save snapshot of memory -----------------------------------------
 ;= ENTER =======================================================================
 ; Writes a list of bytes starting at a specified address.
             
-enter:      jmp     getcmdln
+enter:      lda     CMDLN, X
+            beq     @single
+            
+            
+@single:    ;- print address ---------------------------------------------------
+            lda     ADDRH               ; MSB first
+            jsr     printhex            ; print to screen
+            
+            lda     ADDRL               ; LSB next
+            jsr     printhex            ; print to screen
+            
+            lda     #':'
+            bios    #1                  ; print ':'
+            lda     #' '
+            bios    #1                  ; print ' '
+            
+            lda     (ADDR)
+            jsr     printhex            ; print to screen
+            
+            lda     #'.'
+            bios    #1
+            
+            jmp     getcmdln
             
             
 ;= GO ==========================================================================
@@ -452,13 +471,16 @@ xmodem:     lda     #1                      ; first block = 1
 @end:       lda     #ACK
             jsr     uart_putc               ; send <ACK>
             
+            lda     #'$'
+            bios #1
+            
             lda     #$00
             dec     XBLOCK                  ; adjust blocks received by -1
             lsr     XBLOCK                  ; divide by 2 (blocks-- in MSB)
             ldx     XBLOCK                  ; save MSB to X
             ror     A                       ; 16-bit division by two (X,A)
-            jsr     u16tod                  ; convert to string
-            bios    #2                      ; print bytes received to screen
+            
+            jsr     printhex                ; print to screen
             
             ldx     #.HIBYTE(complete_msg)
             lda     #.LOBYTE(complete_msg)
@@ -521,6 +543,8 @@ xmodem:     lda     #1                      ; first block = 1
 ; Returns:    none
 ;
 ; Destroys: A, X, Y, VRAML, VRAMH
+;
+; Cycles (jsr->rts):
 
 .proc clrln
             
@@ -554,142 +578,34 @@ xmodem:     lda     #1                      ; first block = 1
 .endproc
 
 
-;= U8TOH =======================================================================
-; Converts 8-bit unsigned integer to null terminated hexadecimal string.
+;= PRINTHEX ====================================================================
+; Prints an 8-bit byte in hexadecimal format to the screen.
 ;
-; Parameters: A = uint8
-; Returns:    X = &hexstring<15:8>
-;             A = &hexstring<7:0>
+; Parameters: A = byte
+; Returns:    nothing
 ;
-; Destroys: HEXSTR
-;
-; Cycles (jsr->rts): 51
+; Destroys: X, Y
 
-.proc u8toh
-            tax
+.proc printhex
+            pha                         ; save byte
             
-            sed
+            sed                         ; decimal mode
             lsr     A
             lsr     A
             lsr     A
-            lsr     A
-            cmp     #$0A
-            adc     #$30
-            sta     HEXSTR
+            lsr     A                   ; upper nibble
+            cmp     #$0A                ; set carry if A >= $0A
+            adc     #$30                ; BCD add to convert to ASCII
+            cld                         ; set binary mode
+            bios    #1                  ; print to screen
             
-            txa
-            and     #$0F
-            cmp     #$0A
-            adc     #$30
-            sta     HEXSTR+1
-            cld
-            
-            stz     HEXSTR+2
-            
-            ldx     #$00
-            lda     #HEXSTR
-            
-            rts
-
-.endproc
-
-
-;= U16TOD ======================================================================
-; Converts an unsigned 16-bit integer to a null-terminated string using the
-; double dabble algorithm to first convert to BCD and then a conversion to
-; ACII.
-;
-; Parameters: X = &integer<15:8>
-;             A = &integer<7:0>
-; Returns:    X = &string<15:8>
-;             A = &string<7:0>
-;
-; Destroys: Y, DSTR
-
-.proc u16tod
-            
-            stz     DSTR                    ; set BCD bytes to 0
-            stz     DSTR+1
-            stz     DSTR+2
-            stx     DSTR+3                  ; integer bytes furthest to the
-            sta     DSTR+4                  ; right
-            
-            ; double-dabble to convert binary to BCD
-            ldy     #16                     ; Y = 16 bits, 16 shifts
-@dabble:    ldx     #2                      ; X = BCD packed byte counter
-@lonibble:  lda     DSTR, X
-            and     #$0F                    ; low nibble first
-            cmp     #$05
-            bcc     @hinibble               ; low nibble < 5?
-            
-            lda     DSTR, X                 ; low nibble is greater than 4
-            clc
-            adc     #$03                    ; add three to nibble
-            sta     DSTR, X                 ; save back to BCD byte
-            
-@hinibble:  lda     DSTR, X
-            and     #$F0                    ; high nibble
-            cmp     #$50
-            bcc     @next                   ; high nibble < 5?
-            
-            lda     DSTR, X                 ; high nibble is greater than 4
-            clc
-            adc     #$30                    ; add three to nibble
-            sta     DSTR, X                 ; save back to BCD byte
-            
-@next:      dex                             ; nexy BCD packed byte
-            bpl     @lonibble               ; X < 0?
-
-            asl     DSTR+4                  ; 5 byte left shift
-            rol     DSTR+3
-            rol     DSTR+2
-            rol     DSTR+1
-            rol     DSTR
-            
-            dey                             ; shift counter--
-            bne     @dabble                 ; Y > 0?
-            
-            ; convert BCD to ASCII
-            ldx     #2                      ; X = BCD packed byte counter
-            ldy     #4                      ; Y = null-terminated string counter
-@toascii:   lda     DSTR, X                 ; load BCD byte
-            and     #$0F                    ; low nibble first
-            ora     #'0'                    ; map 0-9 to "0"-"9"
-            sta     DSTR, Y                 ; store ASCII value
-            
-            dey                             ; next string position
-            lda     DSTR, X                 ; load BCD byte
-            lsr     A                       ; high nibble shift
-            lsr     A
-            lsr     A
-            lsr     A
-            ora     #'0'                    ; map 0-9 to "0"-"9"
-            sta     DSTR, Y                 ; store ASCII value
-            
-            dey                             ; next string position
-            dex                             ; next BCD byte
-            bne     @toascii                ; byte > 0?
-            
-            lda     DSTR                    ; last BCD byte (low nibble only)
-            ora     #'0'                    ; map first digit to "0"-"9"
-            sta     DSTR                    ; store ASCII value
-            
-            stz     DSTR+5                  ; null terminator
-            
-            ; remove leading zeros
-            ldx     #0                      ; check the first 4 digits
-@zeros:     lda     DSTR, X                 ; load ASCII digit
-            cmp     #'0'
-            bne     @done                   ; ASCII digit == '0'?
-            
-            inx                             ; next ASCII digit
-            cpx     #4
-            bne     @zeros                  ; digit counter > 0?
-            
-@done:      txa
-            clc
-            adc     #DSTR
-            ldx     #$00                    ; return value = DSTR
+            pla                         ; restore byte
+            sed                         ; decimal mode
+            and     #$0F                ; lower nibble
+            cmp     #$0A                ; set carry if A >= $0A
+            adc     #$30                ; BCD add to convert to ASCII
+            cld                         ; binary mode
+            bios    #1                  ; print to screen
             
             rts
 
