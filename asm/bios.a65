@@ -22,7 +22,7 @@
 ; Author    : Ryan Clarke
 ; E-mail    : kj6msg@icloud.com
 ;===============================================================================
-; Purpose : v65C02 8-bit Computer BIOS.
+; Purpose : BIOS for the v65C02 8-bit computer.
 ;===============================================================================
 
 
@@ -38,41 +38,29 @@
 
 ;= CONSTANTS ===================================================================
 
-.DEFINE     VERSION "2.0.0-alpha."       ; version number
+.DEFINE     VERSION .CONCAT("v65C02 BIOS v", "2.0.0-alpha.", .STRING(.TIME))
 
-ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
+            ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
+
+.OUT VERSION
 
 
 ;===============================================================================
-; BIOS ENTRY POINT
+; BIOS
 ;===============================================================================
 
 .CODE
-            ;- zero page check -------------------------------------------------
-start:      lda     #$AA                ; verify RAM by checking zero page
-            sta     $FF                 ; store $AA to $00FF
-            lda     $FF                 ; read $00FF
-            cmp     #$AA                ; compare with $AA
-            bne     @no_ram             ; $00FF != $AA?
-            
-            ;- stack check -----------------------------------------------------
-            pha                         ; now check the stack by pushing $AA
-            pla                         ; pull the pushed value
-            cmp     #$AA                ; compare with $AA
-            beq     init                ; pushed/pulled == $AA?
-            
-            ;- no RAM installed ------------------------------------------------
-@no_ram:    brk                         ; fatal error
-            .BYTE $01                   ; code 01 - no RAM
-            
-            ;- initialize system -----------------------------------------------
-init:       stz     VGA_STATUS          ; disable VGA and cursor
+
+;= ENTRY POINT =================================================================
+
+bios:       stz     VGA_STATUS          ; disable VGA and cursor
             
             lda     #.HIBYTE(__VRAM_START__ + __VRAM_SIZE__ - 1)
             sta     VRAMH
             lda     #.LOBYTE(__VRAM_START__ + __VRAM_SIZE__ - 1)
             sta     VRAML               ; (VRAM) = VRAM end address
             
+            ;- clear VRAM with default attribute -------------------------------
 @clrscr:    lda     #ATTRIB             ; A = default text attribute
             sta     (VRAM)              ; store attribute to VRAM
             dec     VRAML               ; decrement VRAM address LSB
@@ -122,13 +110,12 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
             sta     KEYMAPL
             lda     #.HIBYTE(keymap)
             sta     KEYMAPH
-            lda     #.LOBYTE(keymapsh)
-            sta     KEYMAPSHL
-            lda     #.HIBYTE(keymapsh)
-            sta     KEYMAPSHH
+            
+            ;- clear keyboard buffer -------------------------------------------
+            lda     KBD_RXREG
             
             ;- print headers to the screen -------------------------------------
-            ldx     #.HIBYTE(bios_ver)
+@headers:   ldx     #.HIBYTE(bios_ver)
             lda     #.LOBYTE(bios_ver)
             jsr     puts                ; BIOS header
             
@@ -155,13 +142,13 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
 ; BIOS CALL ROUTINES
 ;===============================================================================
 
+.CODE
+
 ;= #0 SOFTRST ==================================================================
 ; Soft reset. Sets/resets the appropriate flags and jumps to the reset vector.
 ;
 ; Parameters: none
 ; Returns:    none
-
-.CODE
 
 .proc softrst
             
@@ -178,15 +165,55 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
 ; Parameters: A = character
 ; Returns:    none
 ;
-; Destroys: X, VRAML, VRAMH, CTAB
+; Destroys: X, VRAML, VRAMH
 ;
 ; Cycles (jsr->rts): 63-193
 
-.CODE
-
 .proc putch
             
-            pha                         ; push character to the stack
+            cmp     #LF
+            beq     @lf                 ; linefeed? process
+            cmp     #TAB
+            beq     @tab                ; TAB? process
+            cmp     #BS
+            beq     @bs                 ; backspace? process
+            bra     @print              ; print character
+            
+            ;- process linefeed ------------------------------------------------
+@lf:        ldx     #0                  ; column = 0
+            lda     ROW                 ; A = row
+            inc     A                   ; row++
+            cmp     #25
+            bne     @setcurs            ; 25? nope
+            
+            jsr     scrolldn            ; scroll display
+            lda     #24                 ; row = 24
+            bra     @setcurs
+                        
+            ;- process TAB -----------------------------------------------------
+@tab:       lda     COL                 ; A = column
+            cmp     #72
+            bcs     @lf                 ; column >= 72? new line
+            
+            and     #%11111000          ; clear lower three bits of column
+            adc     #8                  ; add 8 to advance to next tab stop
+            tax                         ; X = new column
+            lda     ROW
+            bra     @setcurs
+            
+            ;- process backspace -----------------------------------------------
+@bs:        lda     ROW                 ; A = row
+            ldx     COL                 ; X = column
+            dex                         ; column--
+            bpl     @setcurs            ; bit 7 set? nope, set cursor
+            
+            ldx     #79                 ; column = 79
+            dec     A                   ; row--
+            bmi     @exit               ; negative? do nothing
+            bra     @setcurs            ; set cursor
+            
+            ;- write character to screen ---------------------------------------
+@print:     tax                         ; save character
             
             lda     VGA_CURSH
             sta     VRAMH
@@ -199,51 +226,20 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
             ora     #.HIBYTE(__VRAM_START__)
             sta     VRAMH               ; (VRAM) = 16-bit VRAM address
             
-            pla                         ; pull character from the stack
-            cmp     #LF
-            beq     @newline            ; character == LF? newline
-            cmp     #TAB
-            beq     @tab                ; character == TAB? tab
+            txa                         ; restore character
             
-@printable: sta     (VRAM)              ; write the character to VRAM
+            sta     (VRAM)              ; write character to screen
             
             ldx     COL                 ; X = current column
             cpx     #79
-            beq     @newline            ; column == 79? newline
+            beq     @lf                 ; column == 79? newline
 
             inx                         ; column++
             lda     ROW                 ; A = current row
-            bra     @done               ; update cursor position
             
-@tab:       lda     COL                 ; A = column
-            cmp     #72
-            bcs     @newline            ; column >= 72
+@setcurs:   jsr     gotoxy              ; update cursor position
             
-            and     #%00000111          ; A = column % 8
-            sta     COL8                ; save value into COL8
-            lda     #8
-            sec
-            sbc     COL8                ; A = 8 - (column % 8)
-            clc
-            adc     COL                 ; add to column
-            tax                         ; X = column
-            lda     ROW                 ; A = row
-            bra     @done               ; update cursor
-            
-@newline:   lda     ROW
-            cmp     #24
-            bne     @nextline           ; row == 24? nope
-            
-            jsr     scrolldn
-            ldx     #0
-            lda     #24
-            bra     @done
-
-@nextline:  ldx     #0                  ; column = 0
-            inc     A                   ; row++
-@done:      jsr     gotoxy              ; update cursor position
-            
-            rts
+@exit:      rts
 
 .endproc
 
@@ -260,8 +256,6 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
 ;
 ; Cycles (jsr->rts): 48 - [205 * strlen + 8]
 
-.CODE
-
 .proc puts
             
             stx     STRH
@@ -269,13 +263,13 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
             
             ldy     #0                  ; Y = string index
 @loop:      lda     (STR), Y            ; A = string character
-            beq     @done               ; character == NUL? done
+            beq     @exit               ; NUL? exit
             
             jsr     putch
             iny                         ; index++
-            bra     @loop               ; next character
+            bne     @loop               ; next character (256 character limit)
             
-@done:      rts
+@exit:      rts
 
 .endproc
 
@@ -287,11 +281,9 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
 ;             A = row
 ; Returns:    none
 ;
-; Destroys: CURSL, CURSH, CURST
+; Destroys: CURSL, CURSH, CURSTMP
 ;
 ; Cycles (jsr->rts): 
-
-.CODE
 
 .proc gotoxy
             
@@ -300,27 +292,27 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
             
             stx     CURSL
             stz     CURSH               ; CURS = column (16-bit)
-            stz     CURST               ; CURST,A = row (16-bit)
+            stz     CURSTMP             ; CURSTMP,A = row (16-bit)
             
             asl     A
             asl     A
             asl     A
             asl     A                   ; don't have to carry until 4th shift
-            rol     CURST               ; CURST,A = row << 4
+            rol     CURSTMP             ; CURSTMP,A = row << 4
             pha                         ; push A
             
             clc
             adc     CURSL
             sta     CURSL
             lda     CURSH
-            adc     CURST
+            adc     CURSTMP
             sta     CURSH               ; CURS = column + (row << 4)
             
-            pla                         ; CURST,A = row << 4
+            pla                         ; CURSTMP,A = row << 4
             asl     A
-            rol     CURST
+            rol     CURSTMP
             asl     A
-            rol     CURST               ; CURST,A = row << 6
+            rol     CURSTMP             ; CURSTMP,A = row << 6
             
             ; VGA cursor address = column + (row << 4) + (row << 6)
             ; $0000 = column + (row << 4)
@@ -329,7 +321,7 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
             adc     CURSL
             sta     VGA_CURSL
             lda     CURSH
-            adc     CURST
+            adc     CURSTMP
             sta     VGA_CURSH
             
 @done:      rts
@@ -343,9 +335,7 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
 ; Parameters: none
 ; Returns:    none
 ;
-; Destroys: 
-
-.CODE
+; Destroys: A
 
 .proc scrolldn
         
@@ -398,28 +388,22 @@ init:       stz     VGA_STATUS          ; disable VGA and cursor
 ; INTERRUPTS
 ;===============================================================================
 
-;= INTERRUPT VECTORS ===========================================================
-
-.SEGMENT "VECTORS"
-
-            .WORD nmi                   ; $FFFA
-            .WORD reset                 ; $FFFC
-            .WORD irq                   ; $FFFE
-
-
-;= INTERRUPT ROUTINES ==========================================================
-
 .CODE
 
-; non-maskable interrupt
+;= NON-MASKABLE INTERRUPT ======================================================
+
 nmi:        rti
-            
-; hardware reset
+
+
+;= RESET =======================================================================
+
 reset:      ldx     #$FF                ; X = $FF
             txs                         ; initialize the stack pointer at $01FF
-            jmp     start               ; BIOS start point
-            
-; interrupt request
+            jmp     bios                ; BIOS entry point
+
+
+;= IRQ/BRK =====================================================================
+
 irq:        pha                         ; save A
             phx                         ; save X
             
@@ -460,8 +444,21 @@ irq:        pha                         ; save A
 
 
 ;===============================================================================
+; INTERRUPT VECTOR TABLE
+;===============================================================================
+
+.SEGMENT "VECTORS"
+
+            .WORD nmi                   ; $FFFA
+            .WORD reset                 ; $FFFC
+            .WORD irq                   ; $FFFE
+
+
+;===============================================================================
 ; READ ONLY DATA
 ;===============================================================================
+
+.RODATA
 
 ;= BIOS CALL TABLE =============================================================
 ; 0 - Soft reset
@@ -469,8 +466,6 @@ irq:        pha                         ; save A
 ; 2 - Write string at current cursor
 ; 3 - Set cursor position
 ; 4 - Scroll screen down one line
-
-.RODATA
 
 bios_tbl_l: .BYTE .LOBYTE(softrst-1)
             .BYTE .LOBYTE(putch-1)
@@ -487,9 +482,7 @@ bios_tbl_h: .BYTE .HIBYTE(softrst-1)
 
 ;= STRINGS =====================================================================
 
-.RODATA
-
-bios_ver:   .BYTE "v65C02 BIOS v", VERSION, .STRING(.TIME), LF, NUL
+bios_ver:   .BYTE VERSION, LF, NUL
 copyright:  .BYTE "Copyright (C) 2018 Ryan Clarke", LF, NUL
 nodisk:     .BYTE "SD card not found.", LF, NUL
 loading:    .BYTE "Loading ROM monitor.", LF, NUL
@@ -497,75 +490,37 @@ loading:    .BYTE "Loading ROM monitor.", LF, NUL
 
 ;= KEYBOARD MAP ================================================================
 
-.RODATA
+keymap:     .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; 00-07
+            .BYTE $00, $00, $00, $00, $00, $09, $60, $00    ; 08-0F
+            .BYTE $00, $00, $00, $00, $00, $71, $31, $00    ; 10-17
+            .BYTE $00, $00, $7A, $73, $61, $77, $32, $00    ; 18-1F
+            .BYTE $00, $63, $78, $64, $65, $34, $33, $00    ; 20-27
+            .BYTE $00, $20, $76, $66, $74, $72, $35, $00    ; 28-2F
+            .BYTE $00, $6E, $62, $68, $67, $79, $36, $00    ; 30-37
+            .BYTE $00, $00, $6D, $6A, $75, $37, $38, $00    ; 38-3F
+            .BYTE $00, $2C, $6B, $69, $6F, $30, $39, $00    ; 40-47
+            .BYTE $00, $2E, $2F, $6C, $3B, $70, $2D, $00    ; 48-4F
+            .BYTE $00, $00, $27, $00, $5B, $3D, $00, $00    ; 50-57
+            .BYTE $00, $00, $0A, $5D, $00, $5C, $00, $00    ; 58-5F
+            .BYTE $00, $00, $00, $00, $00, $00, $08, $00    ; 60-67
+            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; 68-6F
+            .BYTE $00, $00, $00, $00, $00, $00, $1B, $00    ; 70-77
+            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; 78-7F
+            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; 80-87
+            .BYTE $00, $00, $00, $00, $00, $09, $7E, $00    ; 88-8F
+            .BYTE $00, $00, $00, $00, $00, $51, $21, $00    ; 90-97
+            .BYTE $00, $00, $5A, $53, $41, $57, $40, $00    ; 98-9F
+            .BYTE $00, $43, $58, $44, $45, $24, $23, $00    ; A0-A7
+            .BYTE $00, $20, $56, $46, $54, $52, $25, $00    ; A8-AF
+            .BYTE $00, $4E, $42, $48, $47, $59, $5E, $00    ; B0-B7
+            .BYTE $00, $00, $4D, $4A, $55, $26, $2A, $00    ; B8-BF
+            .BYTE $00, $3C, $4B, $49, $4F, $29, $28, $00    ; C0-C7
+            .BYTE $00, $3E, $3F, $4C, $3A, $50, $5F, $00    ; C8-CF
+            .BYTE $00, $00, $22, $00, $7B, $2B, $00, $00    ; D0-D7
+            .BYTE $00, $00, $0A, $7D, $00, $7C, $00, $00    ; D8-DF
+            .BYTE $00, $00, $00, $00, $00, $00, $08, $00    ; E0-E7
+            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; E8-EF
+            .BYTE $00, $00, $00, $00, $00, $00, $1B, $00    ; F0-F7
+            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; F8-FF
 
-keymap:     .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymap08:   .BYTE $00, $00, $00, $00, $00, $09, $60, $00
-keymap10:   .BYTE $00, $00, $00, $00, $00, $71, $31, $00
-keymap18:   .BYTE $00, $00, $7A, $73, $61, $77, $32, $00
-keymap20:   .BYTE $00, $63, $78, $64, $65, $34, $33, $00
-keymap28:   .BYTE $00, $20, $76, $66, $74, $72, $35, $00
-keymap30:   .BYTE $00, $6E, $62, $68, $67, $79, $36, $00
-keymap38:   .BYTE $00, $00, $6D, $6A, $75, $37, $38, $00
-keymap40:   .BYTE $00, $2C, $6B, $69, $6F, $30, $39, $00
-keymap48:   .BYTE $00, $2E, $2F, $6C, $3B, $70, $2D, $00
-keymap50:   .BYTE $00, $00, $27, $00, $5B, $3D, $00, $00
-keymap58:   .BYTE $00, $00, $0A, $5D, $00, $5C, $00, $00
-keymap60:   .BYTE $00, $00, $00, $00, $00, $00, $08, $00
-keymap68:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymap70:   .BYTE $00, $00, $00, $00, $00, $00, $1B, $00
-keymap78:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymap80:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymap88:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymap90:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymap98:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapA0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapA8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapB0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapB8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapC0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapC8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapD0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapD8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapE0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapE8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapF0:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapF8:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-
-
-;= KEYBOARD MAP (SHIFTED) ======================================================
-
-.RODATA
-
-keymapsh:   .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapsh08: .BYTE $00, $00, $00, $00, $00, $09, $7E, $00
-keymapsh10: .BYTE $00, $00, $00, $00, $00, $51, $21, $00
-keymapsh18: .BYTE $00, $00, $5A, $53, $41, $57, $40, $00
-keymapsh20: .BYTE $00, $43, $58, $44, $45, $24, $23, $00
-keymapsh28: .BYTE $00, $20, $56, $46, $54, $52, $25, $00
-keymapsh30: .BYTE $00, $4E, $42, $48, $47, $59, $5E, $00
-keymapsh38: .BYTE $00, $00, $4D, $4A, $55, $26, $2A, $00
-keymapsh40: .BYTE $00, $3C, $4B, $49, $4F, $29, $28, $00
-keymapsh48: .BYTE $00, $3E, $3F, $4C, $3A, $50, $5F, $00
-keymapsh50: .BYTE $00, $00, $22, $00, $7B, $2B, $00, $00
-keymapsh58: .BYTE $00, $00, $0A, $7D, $00, $7C, $00, $00
-keymapsh60: .BYTE $00, $00, $00, $00, $00, $00, $08, $00
-keymapsh68: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapsh70: .BYTE $00, $00, $00, $00, $00, $00, $1B, $00
-keymapsh78: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapsh80: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapsh88: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapsh90: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapsh98: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshA0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshA8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshB0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshB8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshC0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshC8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshD0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshD8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshE0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshE8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshF0: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
-keymapshF8: .BYTE $00, $00, $00, $00, $00, $00, $00, $00
+.END

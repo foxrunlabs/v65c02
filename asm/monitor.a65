@@ -46,170 +46,447 @@
 
 ;= CONSTANTS ===================================================================
 
-ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
+            ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
+            CMDMAX = 78                             ; limit input to one line
 
 
 ;===============================================================================
-; ROM MONITOR ENTRY POINT
+; ROM MONITOR
 ;===============================================================================
+
+;= ENTRY POINT =================================================================
 
 .CODE
 
 monitor:    lda     #VGA_CURS           ; CURS bit mask
-            tsb     VGA_STATUS          ; set CURS bit
+            tsb     VGA_STATUS          ; turn cursor on
             
-            lda     #.HIBYTE(B115200)
+            stz     CMDLN               ; reset command line buffer
+            
+            stz     ADDRL               ; clear address LSB
+            stz     ADDRH               ; clear address MSB
+            
+            lda     #.HIBYTE(B1562500)
             sta     UART_BRGH
-            lda     #.LOBYTE(B115200)
-            sta     UART_BRGL           ; Initialize UART to 115200 baud
+            lda     #.LOBYTE(B1562500)
+            sta     UART_BRGL           ; UART 1,562,500 baud
             
-@prompt:    lda     #'-'
+            
+;= GET COMMAND LINE ============================================================
+
+getcmdln:   lda     #'-'
             bios    #1                  ; print command prompt
             
             ldx     #0                  ; X = string index
-@getline:   lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #DATA_RDY           ; test DATA_RDY
-            beq     @getline            ; DATA_RDY == 0? keep polling
+            
+            ;- get keystroke ---------------------------------------------------
+@getkey:    lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #KBD_DRDY           ; test DATA_RDY
+            beq     @getkey             ; DATA_RDY == 0? keep polling
             
             lda     KBD_RXREG           ; read the scan code
-            tay
-            lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #SHIFT              ; test SHIFT
-            bne     @shifted
-            lda     (KEYMAP), Y         ; convert to ASCII
-            bra     @isnull
-@shifted:   lda     (KEYMAPSH), Y
-@isnull:    beq     @getline            ; ASCII character == 0? ignore non ASCII
-            cmp     #ESC
-            beq     @escape             ; escape key? process
-            cmp     #TAB
-            beq     @getline            ; tab key? process
-            cmp     #BS
-            beq     @backspace          ; backspace key? process
+            tay                         ; Y = index into keyboard map
             
-            pha                         ; save the character
+            ;- check shift key -------------------------------------------------
+            lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #KBD_SHIFT          ; test SHIFT
+            beq     @evalkey            ; set? nope
+            
+            tya
+            ora     #$80                ; shifted, so turn on bit 7
+            tay            
+            
+            ;- evaluate keystroke ----------------------------------------------
+@evalkey:   lda     (KEYMAP), Y         ; convert to ASCII
+            beq     @getkey             ; NUL? ignore
+            cmp     #ESC
+            beq     @esc                ; escape key? process
+            cmp     #BS
+            beq     @bs                 ; backspace key? process
+            cmp     #LF
+            beq     @lf                 ; line feed? process
+            
+            cpx     #CMDMAX
+            beq     @getkey             ; ignore if input > command line maximum
+            
+            sta     CMDLN, X            ; write character to command string
+            inx                         ; next string position
+            
             phx                         ; save string index
             bios    #1                  ; print character to screen
             plx                         ; restore string index
-            pla                         ; restore the character
             
-            cmp     #LF
-            beq     @linefeed           ; line feed? process
+            bra     @getkey             ; keep getting characters
             
-            cpx     #9
-            bcs     @getline            ; ignore input if > 9 characters
+            ;- escape key ------------------------------------------------------
+@esc:       jsr     clrln               ; clear current line
+            bra     getcmdln            ; new prompt
             
-            sta     INPUT, X            ; add character to command string
-            inx                         ; next string position
-            bra     @getline            ; keep getting characters
+            ;- backspace key ---------------------------------------------------
+@bs:        cpx     #0
+            beq     @getkey             ; empty line? get more characters
             
-@escape:    jsr     clrln               ; clear current line
-            bra     @prompt             ; new prompt
-
-@backspace: lda     COL                 ; A = current column
-            cmp     #1                  ; check if beginning of prompt
-            beq     @getline            ; column == 1? ignore backspace
+            dex                         ; decrement string index
             
-            phx                         ; save the string index
-            
-            dec     A                   ; decrement column
-            tax                         ; X = column--
-            lda     ROW                 ; A = current row
-            bios    #3                  ; move cursor to (column--, row)
-            
-            lda     #NUL                ; A = NUL character
-            bios    #1                  ; clear the cursor position
-            
-            ldx     COL                 ; X = current column
-            dex                         ; X = column--
-            lda     ROW                 ; A = current row
-            bios    #3                  ; reset cursor from printed NUL
-            
+            phx                         ; save string index
+            bios    #1                  ; write backspace to screen
+            lda     #NUL
+            bios    #1                  ; write NUL to screen
+            lda     #BS
+            bios    #1                  ; reset cursor with backspace
             plx                         ; restore string index
-            dex                         ; string index--
             
-            bra     @getline            ; keep getting characters
-
-@linefeed:  stz     INPUT, X            ; add NUL terminator
-
-@isempty:   cpx     #0
-            beq     @prompt             ; empty input string? try again
+            bra     @getkey             ; keep getting characters
+                
+            ;- enter key -------------------------------------------------------
+@lf:        stz     CMDLN, X            ; add NUL terminator
             
-            ; validate input string format
-            lda     INPUT+1             ; check 2nd character
-            beq     @noparams           ; NUL? no parameters
-            cmp     #' '
-            bne     invalid             ; Not a space? invalid command
+            phx
+            bios    #1                  ; print LF
+            plx
             
-            lda     INPUT+6             ; check 7th character
-            beq     @single             ; NUL? only one parameter
-            cmp     #' '
-            bne     invalid             ; Not a space? invalid command
-            bra     @double             ; two parameters
             
-            ; parse command
-@noparams:  lda     INPUT
+;= PARSE COMMAND LINE ==========================================================
+            
+parsecmdln: cpx     #0                  ; X = string offset
+            beq     getcmdln            ; empty? done
+            
+            lda     CMDLN               ; A = first character of command line
             cmp     #'?'
-            beq     help                ; help command?
-            cmp     #'g'
-            beq     run                 ; run command?
-            cmp     #'x'
-            beq     xrecv               ; xmodem command?
-            bra     invalid             ; invalid command
+            bne     @nothelp            ; ?? nope, not help
+            jmp     @help               ; it is help, execute
             
-@single:    lda     INPUT
-            cmp     #'d'
-            beq     dump                ; dump command?
-            bra     invalid             ; invalid command
+@nothelp:   stz     R0                  ; R1,R0 will be temporary address
+            stz     R1
             
-@double:    lda     INPUT
-            cmp     #'e'
-            beq     write               ; write command?
-            bra     invalid             ; invalid command
+            ;- convert ASCII character to hexadecimal --------------------------
+            ldx     #0                  ; X = command line string index
+@getaddr:   inx                         ; ++X
+            lda     CMDLN, X            ; A = command line character
+            beq     @chkaddr            ; NUL? check address
+            cmp     #' '
+            beq     @chkaddr            ; space? check address
+            cpx     #5
+            beq     @invalid            ; address larger than 4 chars? invalid
             
-invalid:    ldx     #.HIBYTE(inv_msg)
-            lda     #.LOBYTE(inv_msg)
-            bios    #2                  ; print the invalid message
+            eor     #'0'                ; map digits to 0-9
+            cmp     #10                 ; check if within 0-9
+            bcc     @shift              ; 0-9? valid
             
-            jmp     monitor
+            ora     #$20                ; convert lower to upper case
+            adc     #$88                ; map "A"-"F" to $FA-FF
+            cmp     #$FA                ; check if within $FA-FF
+            bcc     @invalid            ; less than $FA? invalid
+            and     #$0F                ; convert to $0A-$0F
+            
+            ;- shift and OR into temporary location R1,R0 ----------------------
+@shift:     asl     R0
+            rol     R1
+            asl     R0
+            rol     R1
+            asl     R0
+            rol     R1
+            asl     R0
+            rol     R1                  ; R1,R0 << 4
+            
+            ora     R0                  ; R1,R0 | A
+            sta     R0
+            bra     @getaddr            ; keep parsing
+            
+            ;- check if address entered ----------------------------------------
+@chkaddr:   cpx     #1
+            bne     @saveaddr           ; X == 1? nope, valid address
+            lda     CMDLN
+            cmp     #'$'
+            beq     @dump               ; X == 1 & command '$'? dump
+            bra     @invalid            ; X == 1 & not dump? invalid
+            
+            ;- save parsed address ---------------------------------------------
+@saveaddr:  lda     R0
+            sta     ADDRL
+            lda     R1
+            sta     ADDRH               ; ADDR = R1,R0
+            
+            ;- evaluate command ------------------------------------------------
+@evalcmd:   lda     CMDLN               ; A = first character of command line
+            cmp     #'$'
+            beq     @dump               ; $? dump
+            cmp     #'='
+            beq     @enter              ; =? enter
+            cmp     #'@'
+            beq     @go                 ; @? go
+            cmp     #'>'
+            beq     @xmodem             ; >? xmodem
+            
+            ;- invalid command -------------------------------------------------
+@invalid:   ldx     #.HIBYTE(invcmd)
+            lda     #.LOBYTE(invcmd)
+            bios    #2                  ; invalid command
+            
+            jmp     getcmdln            ; go get another one command line
+            
+            
+;===============================================================================
+; ROM MONITOR COMMAND ROUTINES
+;===============================================================================
 
+.CODE
 
+;= JUMP TABLE ==================================================================
+            
+@dump:      jmp     dump
+@enter:     jmp     enter
+@go:        jsr     go                  ; RTS trick
+            jmp     monitor             ; reset monitor
+@help:      jmp     help
+@xmodem:    jmp     xmodem
+            
+            
 ;= DUMP ========================================================================
-
-dump:       jsr     memdump             ; dump 16 bytes of memory to screen
-            jmp     monitor             ; return to the monitor
-
-
+; Dump 16 bytes of data to the screen from a specified address. Automatically
+; increment the stored address by 16 after complete.
+            
+dump:       ;- save snapshot of memory -----------------------------------------
+            ldy     #15
+@buffer:    lda     (ADDR), Y
+            sta     BUF, Y
+            dey
+            bpl     @buffer
+            
+            ;- print address ---------------------------------------------------
+            lda     ADDRH               ; MSB first
+            jsr     u8toh               ; unsigned byte to hex
+            bios    #2                  ; print MSB
+            
+            lda     ADDRL               ; LSB next
+            jsr     u8toh               ; unsigned byte to hex
+            bios    #2                  ; print LSB
+            
+            lda     #':'
+            bios    #1                  ; print ':'
+            lda     #' '
+            bios    #1                  ; print ' '
+            
+            ;- print bytes -----------------------------------------------------
+            ldy     #0                  ; Y = offset
+@bytes:     lda     BUF, Y              ; A = data
+            jsr     u8toh               ; convert hexadecimal string
+            
+            phy                         ; save offset
+            bios    #2                  ; print hexadecimal string
+            lda     #' '
+            bios    #1                  ; print space
+            ply                         ; reset offset
+            
+            iny                         ; offset++
+            cpy     #16
+            bne     @bytes              ; offset == 16? no, keep printing
+            
+            ;- print ASCII representation --------------------------------------
+            lda     #'['
+            bios    #1                  ; print '['
+            
+            ldy     #0                  ; Y = offset
+@ascii:     lda     BUF, Y              ; A = byte
+            
+            cmp     #' '
+            bcc     @noprint            ; byte < ' '? non-printable
+            cmp     #DEL
+            bcc     @print              ; byte < DEL? printable
+            
+@noprint:   lda     #'.'                ; non-printable characters as '.'
+            
+@print:     phy                         ; save offset
+            bios    #1                  ; print ASCII representation
+            ply                         ; restore offset
+            
+            iny                         ; offset++
+            cpy     #16
+            bne     @ascii              ; offset == 16? nope, keep doing it
+            
+            lda     #']'
+            bios    #1                  ; print ']'
+            
+            lda     #LF
+            bios    #1                  ; line feed
+            
+            ;- incremement address ---------------------------------------------
+            lda     ADDRL
+            clc
+            adc     #16
+            sta     ADDRL
+            lda     ADDRH
+            adc     #0
+            sta     ADDRH               ; ADDR = ADDR + 16
+            
+            jmp     getcmdln
+            
+            
+;= ENTER =======================================================================
+; Writes a list of bytes starting at a specified address.
+            
+enter:      jmp     getcmdln
+            
+            
+;= GO ==========================================================================
+; Executes code at a specified address using the RTS trick.
+            
+.proc go
+            
+            ;- subtract 1 from ADDR for the RTS trick --------------------------
+            sec
+            lda     ADDRL
+            sbc     #1
+            sta     ADDRL
+            lda     ADDRH
+            sbc     #0
+            sta     ADDRH               ; ADDR--
+            
+            ;- RTS trick -------------------------------------------------------
+            lda     ADDRH               ; push high byte 1st
+            pha
+            lda     ADDRL               ; push low byte 2nd (popped 1st on RTS)
+            pha
+            rts                         ; jump to (ADDR)
+            
+.endproc
+            
+            
 ;= HELP ========================================================================
-
-help:       ldx     #.HIBYTE(help_msg)
-            lda     #.LOBYTE(help_msg)
+; Prints help message.
+            
+help:       ldx     #.HIBYTE(helpmsg)
+            lda     #.LOBYTE(helpmsg)
             bios    #2
             
-            jmp     monitor
-
-
-;= RUN =========================================================================
-
-run:        jsr     $0200
-            jmp     monitor
-
-
-;= WRITE =======================================================================
-
-write:      jsr     memwrite
-            jmp     monitor
-
-
+            jmp     getcmdln
+            
+            
 ;= XMODEM ======================================================================
+; Receives a file from the UART via the XMODEM protocol and stores it at a
+; specified address.
+            
+xmodem:     lda     #1                      ; first block = 1
+            sta     XBLOCK
+            stz     XCHKSUM
+            
+            lda     ADDRH
+            sta     XDATAH
+            lda     ADDRL
+            sta     XDATAL                  ; (DATA) = RAM address
+            
+            jsr     purge                   ; purge the UART receiver
+            
+            lda     #NAK
+            jsr     uart_putc               ; send NAK to trigger sender
+            
+@start:     jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     XERROR                  ; load error code
+            beq     @cont                   ; no error, start the process
+            jmp     @timeout                ; error > 0? timeout
+            
+@cont:      lda     UART_RXREG              ; get data from UART
+            cmp     #EOT                    ; compared with <EOT>
+            beq     @end                    ; data == <EOT>? end recv
+            cmp     #SOH                    ; compared with <SOH>
+            beq     @block                  ; data == <SOH>? get block #
+            jmp     @fail                   ; else, we failed
 
-xrecv:      jsr     xmodem
-            jmp     monitor
+@block:     jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     XERROR                  ; load error code
+            bne     @timeout                ; error > 0? timeout
+            
+            lda     UART_RXREG              ; read UART data
+            cmp     XBLOCK                  ; compare with expected block #
+            beq     @block2
+            jmp     @fail                   ; data != expected block, failure         
+            
+@block2:    jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     XERROR                  ; load error code
+            bne     @timeout                ; error > 0? timeout
+            
+            lda     UART_RXREG              ; read UART data to clear it
+            
+            ldy     #128                    ; 128 bytes of data per block            
+@data:      jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     XERROR                  ; load error code
+            bne     @timeout                ; error > 0? timeout
+            
+            lda     UART_RXREG              ; read UART data
+            sta     (XDATA)                 ; store to RAM
+            
+            clc
+            adc     XCHKSUM
+            sta     XCHKSUM                 ; checksum += data (no carry)
+            
+            lda     XDATAL
+            clc
+            adc     #$01
+            sta     XDATAL
+            lda     XDATAH
+            adc     #$00
+            sta     XDATAH                  ; increment 16-bit addr at DATA
+            
+            dey                             ; byte counter--
+            bne     @data                   ; counter > 0? keep getting data
+            
+            lda     XDATAH                  ; load RAM address MSB
+            cmp     #$80                    ; are we outside user RAM?
+            beq     @toolarge               ; we are, failure
+            
+@chksum:    jsr     u_getc_1s               ; RX with 1 second timeout
+            ldx     XERROR                  ; load error code
+            bne     @timeout                ; error > 0? timeout
+            
+            lda     UART_RXREG              ; read UART data
+            cmp     XCHKSUM                 ; compare with computed checksum
+            bne     @fail                   ; not equal? failure
+            
+            lda     #ACK
+            jsr     uart_putc               ; send <ACK>
+            inc     XBLOCK                  ; increment block
+            stz     XCHKSUM                 ; reset checksum
+            
+            bra     @start                  ; wait for another block
 
+@end:       lda     #ACK
+            jsr     uart_putc               ; send <ACK>
+            
+            lda     #$00
+            dec     XBLOCK                  ; adjust blocks received by -1
+            lsr     XBLOCK                  ; divide by 2 (blocks-- in MSB)
+            ldx     XBLOCK                  ; save MSB to X
+            ror     A                       ; 16-bit division by two (X,A)
+            jsr     u16tod                  ; convert to string
+            bios    #2                      ; print bytes received to screen
+            
+            ldx     #.HIBYTE(complete_msg)
+            lda     #.LOBYTE(complete_msg)
+            bios    #2                      ; complete string
+            bra     @done
+            
+@timeout:   ldx     #.HIBYTE(timeout_msg)
+            lda     #.LOBYTE(timeout_msg)
+            bios    #2                      ; timeout string
+            bra     @done                   ; done
 
+@toolarge:  ldx     #.HIBYTE(toolarge_msg)
+            lda     #.LOBYTE(toolarge_msg)
+            bios    #2                      ; file too large string
+            bra     @done                   ; done
+
+@fail:      ldx     #.HIBYTE(fail_msg)
+            lda     #.LOBYTE(fail_msg)
+            bios    #2                      ; failed string
+            
+@done:      jmp     getcmdln
+            
+            
 ;===============================================================================
 ; SUBROUTINES
 ;===============================================================================
+
+.CODE
 
 ;= BIOSCALL ====================================================================
 ; Calls a BIOS routine.
@@ -217,11 +494,9 @@ xrecv:      jsr     xmodem
 ; Parameters: Y = BIOS call number
 ;             X = parameter 1 (for two parameter calls)
 ;             A = parameter 2 (parameter 1 for single parameter calls)
-; Returns:    none
+; Returns:    varies with routine
 ;
 ; Destroys:   R0
-
-.CODE
 
 .proc bioscall
             
@@ -240,14 +515,12 @@ xrecv:      jsr     xmodem
 
 
 ;= CLRLN =======================================================================
-; Clear a line with NUL characters and reset cursor to line beginning.
+; Clear a line with NUL characters. Reset cursor to beginning of line.
 ;
 ; Parameters: none
 ; Returns:    none
 ;
-; Destroys: A, X, VRAML, VRAMH
-
-.CODE
+; Destroys: A, X, Y, VRAML, VRAMH
 
 .proc clrln
             
@@ -265,263 +538,16 @@ xrecv:      jsr     xmodem
             lda     VRAMH
             ora     #.HIBYTE(__VRAM_START__)
             sta     VRAMH               ; (VRAM) = 16-bit VRAM address
-                        
-            ldx     #80                 ; 80 columns
-@loop:      lda     #NUL
-            sta     (VRAM)              ; write NUL character
-            inc     VRAML               ; increment RAM address for attribute
-            lda     #ATTRIB
-            sta     (VRAM)              ; write attribute
-            inc     VRAML               ; increment RAM address for next char
-            bne     @next               ; rollover to 00? nope
-            inc     VRAMH               ; VRAML rolled over to 00, increment
-            
-@next:      dex                         ; column counter--
-            bne     @loop               ; 0?
-            
-            rts
-
-.endproc
-
-
-;= HTOU8 =======================================================================
-; Converts a hexadecimal string to an 8-bit unsigned integer. Code inspired from
-; Steve Wozniak's WOZ Monitor. Returns $00 for an invalid input.
-;
-; Parameters: X = hex high nibble
-;             A = hex low nibble
-; Returns:    A = uint8
-;
-; Destroys:   BYTE
-;
-; Cycles (jsr->rts): 36-63 (invalid high nibble - $FF)
-
-.CODE
-
-.proc htou8
-            
-            pha                         ; save hex low nibble
-            txa                         ; A = hex high nibble
-            eor     #'0'                ; map digits to 0-9
-            cmp     #10                 ; check if within 0-9
-            bcc     @validMSN           ; 0-9? valid
-            
-            adc     #$88                ; map "A"-"F" to $FA-FF
-            cmp     #$FA                ; check if within $FA-FF
-            bcc     @invalid            ; less than $FA? invalid
-            
-@validMSN:  asl     A                   ; shift result to high nibble
-            asl     A
-            asl     A
-            asl     A
-            sta     BYTE                ; save result to $0000
-            
-            pla                         ; A = hex low nibble
-            eor     #'0'                ; map digits to 0-9
-            cmp     #10                 ; check if within 0-9
-            bcc     @validLSN           ; 0-9? valid
-            
-            adc     #$88                ; map "A"-"F" to $FA-FF
-            cmp     #$FA                ; check if within $FA-FF
-            bcc     @invalid            ; less than $FA? invalid
-            and     #$0F                ; map to $0A-$0F
-            
-@validLSN:  ora     BYTE                ; combine high and low nibbles
-            bra     @exit               ; done
-            
-@invalid:   pla                         ; clear the stack
-            lda     #$00                ; invalid input = $00 value
-            
-@exit:      rts
-
-.endproc
-
-
-;= HTOU16 ======================================================================
-; Converts a hexadecimal string to a 16-bit unsigned integer. Code inspired from
-; Steve Wozniak's WOZ Monitor. Returns $0000 for an invalid input.
-;
-; Parameters: X = &hexstring<15:8>
-;             A = &hexstring<7:0>
-; Returns:    X = integer<15:8>
-;             A = integer<7:0>
-;
-; Destroys:   Y, HSTRL, HSTRH, WORDL, WORDH
-;
-; Cycles (jsr->rts): 51-354
-
-.CODE
-
-.proc htou16
-
-            stx     HSTRH
-            sta     HSTRL               ; (HSTR) = hex string
-            
-            stz     WORDH
-            stz     WORDL               ; WORD = 16-bit integer
-            
-            ldy     #0                  ; string index
-@loop:      lda     (HSTR), Y           ; A = hex digit
-            eor     #'0'                ; map digits to 0-9
-            cmp     #10
-            bcc     @valid              ; 0-9? valid
-            
-            adc     #$88                ; map "A"-"F" to $FA-FF
-            cmp     #$FA
-            bcc     @invalid            ; less than $FA? invalid
-            
-@valid:     asl     A                   ; shift into high nibble
-            asl     A
-            asl     A
-            asl     A
-            
-            asl     A                   ; MSB to C
-            rol     WORDL               ; C to LSB
-            rol     WORDH               ; propagate result
-            asl     A                   ; MSB to C
-            rol     WORDL               ; C to LSB
-            rol     WORDH               ; propagate result
-            asl     A                   ; MSB to C
-            rol     WORDL               ; C to LSB
-            rol     WORDH               ; propagate result
-            asl     A                   ; MSB to C
-            rol     WORDL               ; C to LSB
-            rol     WORDH               ; propagate result
-            
-            iny                         ; next character
-            cpy     #4                  ; last one?
-            bne     @loop               ; nope, continue
-            bra     @done               ; yes, we're doing
-            
-@invalid:   ldx     #$00                ; invalid input = $0000 value
-            lda     #$00
-            bra     @exit
-
-@done:      ldx     WORDH               ; 16-bit value stored at WORD
-            lda     WORDL
-            
-@exit:      rts
-
-.endproc
-
-
-;= MEMDUMP =====================================================================
-; Dump 16 bytes of memory to the screen
-;
-; Parameters: none
-; Returns:    none
-
-.proc memdump
-            
-            ldx     #$00
-            lda     #INPUT+2
-            jsr     htou16              ; convert hex string to uint16
-            stx     MEMH
-            sta     MEML                ; $(MEM) = start address
-            
-            ; take a snapshot of the memory
-            ldy     #15                 ; Y = offset
-@buffer:    lda     (MEM), Y            ; A = load memory
-            sta     BUF, Y              ; store in buffer
-            dey                         ; offset--
-            bpl     @buffer             ; offset >= 0?
-            
-            ; print passed memory address
-            txa                         ; MSB first
-            jsr     u8toh               ; unsigned byte to hex
-            bios    #2                  ; print MSB
-            lda     MEML                ; LSB next
-            jsr     u8toh               ; unsigned byte to hex
-            bios    #2                  ; print LSB
-            
-            lda     #':'
-            bios    #1
-            lda     #' '
-            bios    #1
             
             ldy     #0                  ; Y = offset
-@bytes:     lda     BUF, Y              ; load buffered memory
-            jsr     u8toh               ; convert byte to hex
-            phy                         ; save Y
-            bios    #2                  ; print hex
-            lda     #' '
-            bios    #1                  ; print a space
-            
-            ply                         ; restore Y
-            iny                         ; next address
-            cpy     #16
-            bne     @bytes              ; offset < 16?
-            
-            lda     #'['                ; start ASCII display
-            bios    #1
-            
-            ldy     #0                  ; Y = offset
-@toascii:   lda     BUF, Y              ; load buffered memory
-            phy                         ; save Y
-            cmp     #$20                ; SPACE
-            bcc     @notascii           ; value < SPACE?
-            cmp     #$7F                ; DEL
-            bcs     @notascii           ; value >= DEL?
-            
-            bios    #1                  ; print the ASCII representation
-            bra     @next
-            
-@notascii:  lda     #'.'                ; print a period for unprintables
-            bios    #1
-            
-@next:      ply                         ; restore Y
-            iny                         ; offset++
-            cpy     #16
-            bne     @toascii            ; offset < 16?
-            
-            lda     #']'
-            bios    #1                  ; end of ASCII display
-            
-            lda     #LF
-            bios    #1                  ; line feed
-            
-            rts
-
-.endproc
-
-
-;= MEMWRITE ====================================================================
-; Write byte to memory.
-;
-; Parameters: none
-; Returns:    none
-
-.proc memwrite
-            
-            ldx     #$00
-            lda     #INPUT+2
-            jsr     htou16              ; convert address hex string to uint16
-            stx     MEMH
-            sta     MEML                ; (DUMP) = address
-            
-            ldx     INPUT+7
-            lda     INPUT+8
-            jsr     htou8               ; convert value hex string to uint8
-            sta     (MEM)
-            pha                         ; save write value
-            
-            lda     MEMH                ; address MSB
-            jsr     u8toh               ; convert address MSB to hex string
-            bios    #2                  ; print address MSB
-            lda     MEML                ; address LSB
-            jsr     u8toh               ; convert address LSB to hex string
-            bios    #2                  ; print address LSB
-            lda     #':'
-            bios    #1
-            lda     #' '
-            bios    #1
-            
-            pla                         ; A = write value
-            jsr     u8toh               ; convert write value to hex string
-            bios    #2                  ; print write value
-            
-            lda     #LF
-            bios    #1
+@loop:      lda     #NUL                ; A = NUL
+            sta     (VRAM), Y           ; (VRAM) = NUL
+            iny                         ; Y++
+            lda     ATTR                ; A = attribute
+            sta     (VRAM), Y           ; (VRAM) = attribute
+            iny                         ; Y++
+            cpy     #160
+            bne     @loop               ; Y == 160? nope, keep clearing
             
             rts
 
@@ -530,17 +556,14 @@ xrecv:      jsr     xmodem
 
 ;= U8TOH =======================================================================
 ; Converts 8-bit unsigned integer to null terminated hexadecimal string.
-; Inspired by Steve Wozniak's WOZ Monitor.
 ;
 ; Parameters: A = uint8
 ; Returns:    X = &hexstring<15:8>
 ;             A = &hexstring<7:0>
 ;
-; Destroys: DSTR
+; Destroys: HEXSTR
 ;
 ; Cycles (jsr->rts): 51
-
-.CODE
 
 .proc u8toh
             tax
@@ -552,19 +575,19 @@ xrecv:      jsr     xmodem
             lsr     A
             cmp     #$0A
             adc     #$30
-            sta     DSTR
+            sta     HEXSTR
             
             txa
             and     #$0F
             cmp     #$0A
             adc     #$30
-            sta     DSTR+1
+            sta     HEXSTR+1
             cld
             
-            stz     DSTR+2
+            stz     HEXSTR+2
             
             ldx     #$00
-            lda     #DSTR
+            lda     #HEXSTR
             
             rts
 
@@ -582,8 +605,6 @@ xrecv:      jsr     xmodem
 ;             A = &string<7:0>
 ;
 ; Destroys: Y, DSTR
-
-.CODE
 
 .proc u16tod
             
@@ -675,140 +696,6 @@ xrecv:      jsr     xmodem
 .endproc
 
 
-;===============================================================================
-; XMODEM RECEIVER
-;===============================================================================
-
-;= XMODEM ======================================================================
-; Receives a file from the UART via the XMODEM protocol.
-;
-; Parameters: none
-; Returns:    none
-;
-; Destroys:
-
-.CODE
-
-.proc xmodem
-            
-            lda     #1                      ; first block = 1
-            sta     BLOCK
-            stz     CHKSUM
-            
-            lda     #.HIBYTE($0200)
-            sta     DATAH
-            lda     #.LOBYTE($0200)
-            sta     DATAL                   ; (DATA) = RAM address
-            
-            jsr     purge                   ; purge the UART receiver
-            
-            lda     #NAK
-            jsr     uart_putc               ; send NAK to trigger sender
-            
-@start:     jsr     u_getc_1s               ; RX with 1 second timeout
-            ldx     ERROR                   ; load error code
-            beq     @cont                   ; no error, start the process
-            jmp     @timeout                ; error > 0? timeout
-            
-@cont:      lda     UART_RXREG              ; get data from UART
-            cmp     #EOT                    ; compared with <EOT>
-            beq     @end                    ; data == <EOT>? end recv
-            cmp     #SOH                    ; compared with <SOH>
-            beq     @block                  ; data == <SOH>? get block #
-            jmp     @fail                   ; else, we failed
-
-@block:     jsr     u_getc_1s               ; RX with 1 second timeout
-            ldx     ERROR                   ; load error code
-            bne     @timeout                ; error > 0? timeout
-            
-            lda     UART_RXREG              ; read UART data
-            cmp     BLOCK                   ; compare with expected block #
-            beq     @block2
-            jmp     @fail                   ; data != expected block, failure         
-            
-@block2:    jsr     u_getc_1s               ; RX with 1 second timeout
-            ldx     ERROR                   ; load error code
-            bne     @timeout                ; error > 0? timeout
-            
-            lda     UART_RXREG              ; read UART data to clear it
-            
-            ldy     #128                    ; 128 bytes of data per block            
-@data:      jsr     u_getc_1s               ; RX with 1 second timeout
-            ldx     ERROR                   ; load error code
-            bne     @timeout                ; error > 0? timeout
-            
-            lda     UART_RXREG              ; read UART data
-            sta     (DATA)                  ; store to RAM
-            
-            clc
-            adc     CHKSUM
-            sta     CHKSUM                  ; checksum += data (no carry)
-            
-            lda     DATAL
-            clc
-            adc     #$01
-            sta     DATAL
-            lda     DATAH
-            adc     #$00
-            sta     DATAH                   ; increment 16-bit addr at DATA
-            
-            dey                             ; byte counter--
-            bne     @data                   ; counter > 0? keep getting data
-            
-            lda     DATAH                   ; load RAM address MSB
-            cmp     #$80                    ; are we outside user RAM?
-            beq     @toolarge               ; we are, failure
-            
-@chksum:    jsr     u_getc_1s               ; RX with 1 second timeout
-            ldx     ERROR                   ; load error code
-            bne     @timeout                ; error > 0? timeout
-            
-            lda     UART_RXREG              ; read UART data
-            cmp     CHKSUM                  ; compare with computed checksum
-            bne     @fail                   ; not equal? failure
-            
-            lda     #ACK
-            jsr     uart_putc               ; send <ACK>
-            inc     BLOCK                   ; increment block
-            stz     CHKSUM                  ; reset checksum
-            
-            bra     @start                  ; wait for another block
-
-@end:       lda     #ACK
-            jsr     uart_putc               ; send <ACK>
-            
-            lda     #$00
-            dec     BLOCK                   ; adjust blocks received by -1
-            lsr     BLOCK                   ; divide by 2 (blocks-- in MSB)
-            ldx     BLOCK                   ; save MSB to X
-            ror     A                       ; 16-bit division by two (X,A)
-            jsr     u16tod                  ; convert to string
-            bios    #2                      ; print bytes received to screen
-            
-            ldx     #.HIBYTE(complete_msg)
-            lda     #.LOBYTE(complete_msg)
-            bios    #2                      ; complete string
-            bra     @done
-            
-@timeout:   ldx     #.HIBYTE(timeout_msg)
-            lda     #.LOBYTE(timeout_msg)
-            bios    #2                      ; timeout string
-            bra     @done                   ; done
-
-@toolarge:  ldx     #.HIBYTE(toolarge_msg)
-            lda     #.LOBYTE(toolarge_msg)
-            bios    #2                      ; file too large string
-            bra     @done                   ; done
-
-@fail:      ldx     #.HIBYTE(fail_msg)
-            lda     #.LOBYTE(fail_msg)
-            bios    #2                      ; failed string
-
-@done:      rts
-
-.endproc
-
-
 ;= PURGE =======================================================================
 ; Purges the UART input buffer.
 ;
@@ -816,8 +703,6 @@ xrecv:      jsr     xmodem
 ; Returns:    none
 ;
 ; Destroys:   A
-
-.CODE
 
 .proc purge
             
@@ -848,11 +733,9 @@ xrecv:      jsr     xmodem
 ;
 ; Destroys:   A, ERROR
 
-.CODE
-
 .proc u_getc_1s
             
-            stz     ERROR                   ; reset error code
+            stz     XERROR                  ; reset error code
             
             lda     #$80
             sta     TMR_TIMER08
@@ -864,14 +747,14 @@ xrecv:      jsr     xmodem
             sta     TMR_TIMER32             ; set timer for 1 second
             
 @loop:      lda     UART_STATUS             ; read UART STATUS register
-            bit     #RXFULL                 ; check RXFULL flag
+            bit     #UART_RXFULL            ; check RXFULL flag
             bne     @done                   ; RXFULL == 0? check timer
             
             lda     TMR_STATUS              ; read timer STATUS register
             bit     #%00000001              ; check OVRFL flag
             beq     @loop                   ; OVRFL flag == 0? loop
             
-            inc     ERROR                   ; time out
+            inc     XERROR                  ; time out
             
 @done:      lda     UART_RXREG              ; read UART data
             
@@ -888,14 +771,12 @@ xrecv:      jsr     xmodem
 ;
 ; Cycles (jsr->rts): 30 (assumes not busy)
 
-.CODE
-
 .proc uart_putc
             
             pha                     ; save character
             
 @poll:      lda     UART_STATUS     ; read UART STATUS register
-            bit     #TXBUSY         ; test TXBUSY flag
+            bit     #UART_TXBUSY    ; test TXBUSY flag
             bne     @poll           ; TXBUSY == 1?
             
             pla                     ; restore character
@@ -910,21 +791,21 @@ xrecv:      jsr     xmodem
 ; READ ONLY DATA
 ;===============================================================================
 
-;= STRINGS =====================================================================
-
 .RODATA
 
-inv_msg:    .BYTE "invalid command", LF, 0
+;= STRINGS =====================================================================
 
-help_msg:   .BYTE "dump", TAB, "D [address]", LF
-            .BYTE "enter", TAB, "E address [byte]", LF
-            .BYTE "go", TAB, "G [address]", LF
+invcmd:     .BYTE "invalid command", LF, NUL
+
+helpmsg:    .BYTE "dump", TAB, "$[address]", LF
+            .BYTE "enter", TAB, "=address [byte]", LF
+            .BYTE "go", TAB, "@address", LF
             .BYTE "help", TAB, "?", LF
-            .BYTE "input", TAB, "I device register", LF
-            .BYTE "output", TAB, "O device register byte", LF
-            .BYTE "xmodem", TAB, "X [address]", LF, NUL
+            .BYTE "xmodem", TAB, ">address", LF, NUL
 
 timeout_msg:  .BYTE "timeout", LF, NUL
 fail_msg:     .BYTE "failed", LF, NUL
 complete_msg: .BYTE " bytes received", LF, NUL
 toolarge_msg: .BYTE "file too large", LF, NUL
+
+.END

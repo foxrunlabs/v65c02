@@ -167,7 +167,8 @@ module KeyboardController
     wire       rxreg_en;        // receive register enable
     reg  [7:0] rxreg_reg;       // received data register
     
-    assign rxreg_en = (state_reg == S_MAKE);    // only save make codes
+    // only save make codes from 0-127
+    assign rxreg_en = (state_reg == S_MAKE) & (~rx_data[7]);
     
     initial rxreg_reg = 8'h00;
     always @(posedge clk_i)

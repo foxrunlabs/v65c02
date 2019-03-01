@@ -31,6 +31,7 @@
 ;===============================================================================
 
 ;= GENERAL REGISTERS ===========================================================
+
 R0 = $00
 R1 = $01
 R2 = $02
@@ -52,67 +53,61 @@ RF = $0F
 ;= BIOS ========================================================================
 
 ;- console routines ------------------------------------------------------------
-COL   = $10
-ROW   = $11
-ATTR  = $12
-VRAM  = $13
-VRAML = $13
-VRAMH = $14
-STR   = $15
-STRL  = $15
-STRH  = $16
-COL8  = $17
-CURS  = $18
-CURSL = $18
-CURSH = $19
-CURST = $1A
-SCROLL  = $4F
-SCROLLL = $4F
-SCROLLH = $50
+COL     = $10               ; current cursor column
+ROW     = $11               ; current cursor row
+ATTR    = $12               ; text attribute
+VRAM    = $13               ; video RAM pointer
+VRAML   = $13               ; video RAM pointer LSB
+VRAMH   = $14               ; video RAM pointer MSB
+STR     = $15               ; string pointer
+STRL    = $15               ; string pointer LSB
+STRH    = $16               ; string pointer MSB
+CURS    = $17               ; cursor address
+CURSL   = $17               ; cursor address LSB
+CURSH   = $18               ; cursor address MSB
+CURSTMP = $19               ; cursor temp
+SCROLL  = $1A
+SCROLLL = $1A
+SCROLLH = $1B
 
-;- call table ------------------------------------------------------------------
-BIOSTL  = $47
-BIOSTLL = $47
-BIOSTLH = $48
-BIOSTH  = $49
-BIOSTHL = $49
-BIOSTHH = $4A
+;- call table address ----------------------------------------------------------
+BIOSTL  = $1C               ; call table (LSB) pointer
+BIOSTLL = $1C               ; call table (LSB) pointer LSB
+BIOSTLH = $1D               ; call table (LSB) pointer MSB
+BIOSTH  = $1E               ; call table (MSB) pointer
+BIOSTHL = $1E               ; call table (MSB) pointer LSB
+BIOSTHH = $1F               ; call table (MSB) pointer MSB
 
-;- keyboard map ----------------------------------------------------------------
-KEYMAP    = $4B
-KEYMAPL   = $4B
-KEYMAPH   = $4C
-KEYMAPSH  = $4D
-KEYMAPSHL = $4D
-KEYMAPSHH = $4E
+;- keyboard map address --------------------------------------------------------
+KEYMAP  = $20               ; keymap pointer
+KEYMAPL = $20               ; keymap pointer LSB
+KEYMAPH = $21               ; keymap pointer MSB
 
 
 ;= ROM MONITOR =================================================================
 
+;- ROM monitor -----------------------------------------------------------------
+CMDLN = $0200
+BUF   = $0200
+ADDR  = $22
+ADDRL = $22
+ADDRH = $23
+
 ;- XMODEM receiver -------------------------------------------------------------
-BLOCK  = $1B
-CHKSUM = $1C
-DATA   = $1D
-DATAL  = $1D
-DATAH  = $1E
-ERROR  = $1F
+XBLOCK  = $24
+XCHKSUM = $25
+XDATA   = $26
+XDATAL  = $26
+XDATAH  = $27
+XERROR  = $28
 
 ;- conversion routines ---------------------------------------------------------
-BYTE  = $20
-WORD  = $21
-WORDL = $21
-WORDH = $22
-HSTR  = $23
-HSTRL = $23
-HSTRH = $24
-DSTR  = $25
-
-;- ROM monitor -----------------------------------------------------------------
-INPUT = $2B
-MEM   = $35
-MEML  = $35
-MEMH  = $36
-BUF   = $37
+BYTE   = $29
+WORD   = $2A
+WORDL  = $2A
+WORDH  = $2B
+HEXSTR = $2C
+DSTR   = $2C
 
 
 ;===============================================================================
@@ -132,6 +127,7 @@ CR  = $0D
 NAK = $15
 CAN = $18
 ESC = $1B
+DEL = $7F
 
 
 ;= TEXT COLORS =================================================================
@@ -160,11 +156,13 @@ WHITE         = $0F
 
 ;= DEVICE MEMORY MAP ===========================================================
 
+;- device 0 --------------------------------------------------------------------
 VGA         = $BFA0
 VGA_STATUS  = VGA + 0
 VGA_CURSL   = VGA + 1
 VGA_CURSH   = VGA + 2
 
+;- device 1 --------------------------------------------------------------------
 SSEG        = $BFA8
 SSEG_DIGITS = SSEG + 0
 SSEG_DP     = SSEG + 1
@@ -173,6 +171,7 @@ SSEG_BYTE1  = SSEG + 3
 SSEG_BYTE2  = SSEG + 4
 SSEG_BYTE3  = SSEG + 5
 
+;- device 2 --------------------------------------------------------------------
 UART        = $BFB0
 UART_STATUS = UART + 0
 UART_BRGL   = UART + 1
@@ -180,11 +179,13 @@ UART_BRGH   = UART + 2
 UART_TXREG  = UART + 3
 UART_RXREG  = UART + 4
 
+;- device 3 --------------------------------------------------------------------
 KBD         = $BFB8
 KBD_STATUS  = KBD + 0
 KBD_RXREG   = KBD + 1
 KBD_TXREG   = KBD + 2
 
+;- device 4 --------------------------------------------------------------------
 TMR         = $BFC0
 TMR_STATUS  = TMR + 0
 TMR_TIMER08 = TMR + 1
@@ -200,17 +201,17 @@ VGA_EN   = %00000001                    ; EN bit of VGA STATUS register
 VGA_CURS = %00000010                    ; CURS bit mask for VGA STATUS register
 
 ;- keyboard status register bits -----------------------------------------------
-DATA_RDY = %00000001                   ; data ready status bit
-RX_ERR   = %00000010                   ; receive error
-TX_BUSY  = %00000100                   ; transmit busy status bit
-TX_ERR   = %00001000                   ; transmit error
-SHIFT    = %00010000                   ; shift key status bit
-CTRL     = %00100000                   ; control key status bit
-ALT      = %01000000                   ; alt key status bit
+KBD_DRDY   = %00000001                  ; data ready status bit
+KBD_RXERR  = %00000010                  ; receive error
+KBD_TXBUSY = %00000100                  ; transmit busy status bit
+KBD_TXERR  = %00001000                  ; transmit error
+KBD_SHIFT  = %00010000                  ; shift key status bit
+KBD_CTRL   = %00100000                  ; control key status bit
+KBD_ALT    = %01000000                  ; alt key status bit
 
 ;- UART status register bits ---------------------------------------------------
-TXBUSY = %00000001
-RXFULL = %00000010
+UART_TXBUSY = %00000001
+UART_RXFULL = %00000010
 
 ;= UART baud rate generator values ---------------------------------------------
 B110     = 28408
