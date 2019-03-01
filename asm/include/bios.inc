@@ -206,6 +206,10 @@ KBD_ALT    = %01000000                  ; alt key status bit
 UART_TXBUSY = %00000001
 UART_RXFULL = %00000010
 
+;- timer status register bits --------------------------------------------------
+TMR_OVRFL = %00000001
+
+
 ;= UART baud rate generator values ---------------------------------------------
 B110     = 28408
 B300     = 10416

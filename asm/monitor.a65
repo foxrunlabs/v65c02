@@ -47,7 +47,7 @@
 ;= CONSTANTS ===================================================================
 
             ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
-            CMDMAX = 78                             ; limit input to one line
+            CMDMAX = 5                              ; limit input 5 total chars
 
 
 ;===============================================================================
@@ -148,27 +148,24 @@ getcmdln:   lda     #'-'
             
 ;= PARSE COMMAND LINE ==========================================================
             
-parsecmdln: cpx     #0                  ; X = string offset
-            beq     getcmdln            ; empty? done
-            
-            lda     CMDLN               ; A = first character of command line
+parsecmdln: lda     CMDLN               ; A = first character of command line
+            beq     getcmdln            ; NUL? get another command line
+            cmp     #'g'
+            beq     @go                 ; g? go
             cmp     #'?'
-            bne     @nothelp            ; ?? nope, not help
-            jmp     @help               ; it is help, execute
+            beq     @help               ; help? help
+            cmp     #'x'
+            beq     @xmodem             ; x? xmodem
             
-@nothelp:   stz     R0                  ; R1,R0 will be temporary address
+@getaddr:   stz     R0                  ; R1,R0 will be temporary address
             stz     R1
             
             ;- convert ASCII character to hexadecimal --------------------------
             ldx     #0                  ; X = command line string index
-@getaddr:   inx                         ; ++X
+@convaddr:  inx                         ; ++X
             lda     CMDLN, X            ; A = command line character
             beq     @chkaddr            ; NUL? check address
-            cmp     #' '
-            beq     @chkaddr            ; space? check address
-            cpx     #5
-            beq     @invalid            ; address larger than 4 chars? invalid
-            
+                        
             eor     #'0'                ; map digits to 0-9
             cmp     #10                 ; check if within 0-9
             bcc     @shift              ; 0-9? valid
@@ -191,18 +188,14 @@ parsecmdln: cpx     #0                  ; X = string offset
             
             ora     R0                  ; R1,R0 | A
             sta     R0
-            bra     @getaddr            ; keep parsing
+            bra     @convaddr           ; keep converting
             
             ;- check if address entered ----------------------------------------
 @chkaddr:   cpx     #1
-            bne     @saveaddr           ; X == 1? nope, valid address
-            lda     CMDLN
-            cmp     #'$'
-            beq     @dump               ; X == 1 & command '$'? dump
-            bra     @invalid            ; X == 1 & not dump? invalid
+            beq     @evalcmd            ; no address entered? evaluate command
             
             ;- save parsed address ---------------------------------------------
-@saveaddr:  lda     R0
+            lda     R0
             sta     ADDRL
             lda     R1
             sta     ADDRH               ; ADDR = R1,R0
@@ -213,14 +206,10 @@ parsecmdln: cpx     #0                  ; X = string offset
             beq     @dump               ; $? dump
             cmp     #'='
             beq     @enter              ; =? enter
-            cmp     #'@'
-            beq     @go                 ; @? go
-            cmp     #'>'
-            beq     @xmodem             ; >? xmodem
             
             ;- invalid command -------------------------------------------------
-@invalid:   ldx     #.HIBYTE(invcmd)
-            lda     #.LOBYTE(invcmd)
+@invalid:   ldx     #.HIBYTE(invalidmsg)
+            lda     #.LOBYTE(invalidmsg)
             bios    #2                  ; invalid command
             
             jmp     getcmdln            ; go get another one command line
@@ -236,8 +225,7 @@ parsecmdln: cpx     #0                  ; X = string offset
             
 @dump:      jmp     dump
 @enter:     jmp     enter
-@go:        jsr     go                  ; RTS trick
-            jmp     monitor             ; reset monitor
+@go:        jmp     go
 @help:      jmp     help
 @xmodem:    jmp     xmodem
             
@@ -320,53 +308,19 @@ dump:       ;- save snapshot of memory -----------------------------------------
             
             
 ;= ENTER =======================================================================
-; Writes a list of bytes starting at a specified address.
+; Writes a byte at a specified address.
             
-enter:      lda     CMDLN, X
-            beq     @single
-            
-            
-@single:    ;- print address ---------------------------------------------------
-            lda     ADDRH               ; MSB first
-            jsr     printhex            ; print to screen
-            
-            lda     ADDRL               ; LSB next
-            jsr     printhex            ; print to screen
-            
-            lda     #':'
-            bios    #1                  ; print ':'
-            lda     #' '
-            bios    #1                  ; print ' '
-            
-            lda     (ADDR)
-            jsr     printhex            ; print to screen
-            
-            lda     #'.'
-            bios    #1
-            
-            jmp     getcmdln
+enter:      jmp     getcmdln
             
             
 ;= GO ==========================================================================
-; Executes code at a specified address using the RTS trick.
+; Executes code at $0300 and then resets monitor.
             
 .proc go
             
-            ;- subtract 1 from ADDR for the RTS trick --------------------------
-            sec
-            lda     ADDRL
-            sbc     #1
-            sta     ADDRL
-            lda     ADDRH
-            sbc     #0
-            sta     ADDRH               ; ADDR--
+            jsr     $0300               ; execute at $0300
             
-            ;- RTS trick -------------------------------------------------------
-            lda     ADDRH               ; push high byte 1st
-            pha
-            lda     ADDRL               ; push low byte 2nd (popped 1st on RTS)
-            pha
-            rts                         ; jump to (ADDR)
+            jmp     monitor             ; reset monitor
             
 .endproc
             
@@ -382,126 +336,153 @@ help:       ldx     #.HIBYTE(helpmsg)
             
             
 ;= XMODEM ======================================================================
-; Receives a file from the UART via the XMODEM protocol and stores it at a
-; specified address.
+; Receives a file from the UART via the XMODEM protocol and stores it at $0300.
             
 xmodem:     lda     #1                      ; first block = 1
             sta     XBLOCK
             stz     XCHKSUM
             
-            lda     ADDRH
+            lda     #$03
             sta     XDATAH
-            lda     ADDRL
-            sta     XDATAL                  ; (DATA) = RAM address
+            stz     XDATAL                  ; (XDATA) points to $0300
             
-            jsr     purge                   ; purge the UART receiver
+            ;- purge the UART RXREG for one second -----------------------------
+            lda     #$80
+            sta     TMR_TIMER08
+            lda     #$F0
+            sta     TMR_TIMER16
+            lda     #$FA
+            sta     TMR_TIMER24
+            lda     #$02
+            sta     TMR_TIMER32             ; Timer set for 1 second
             
+@purge:     lda     UART_RXREG              ; clear RXREG
+            lda     TMR_STATUS              ; read timer STATUS register
+            bit     #TMR_OVRFL              ; test OVRFL flag
+            beq     @purge                  ; OVRFL == 0? loop
+            
+            ;- start reception -------------------------------------------------
             lda     #NAK
-            jsr     uart_putc               ; send NAK to trigger sender
+            jsr     uart_write              ; send NAK to trigger sender
             
-@start:     jsr     u_getc_1s               ; RX with 1 second timeout
+@start:     jsr     uart_read               ; RX with 1 second timeout
             ldx     XERROR                  ; load error code
-            beq     @cont                   ; no error, start the process
-            jmp     @timeout                ; error > 0? timeout
+            beq     @evalbyte               ; received? evaluate
+            jmp     @timeout                ; timeout? timeout
             
-@cont:      lda     UART_RXREG              ; get data from UART
-            cmp     #EOT                    ; compared with <EOT>
-            beq     @end                    ; data == <EOT>? end recv
-            cmp     #SOH                    ; compared with <SOH>
-            beq     @block                  ; data == <SOH>? get block #
+            ;- evaluate RX byte ------------------------------------------------
+@evalbyte:  cmp     #EOT
+            beq     @eot                    ; <EOT>? end recv
+            cmp     #SOH
+            beq     @getblk1                ; <SOH>? get block number
             jmp     @fail                   ; else, we failed
-
-@block:     jsr     u_getc_1s               ; RX with 1 second timeout
+            
+            ;- get block number ------------------------------------------------
+@getblk1:   jsr     uart_read               ; RX with 1 second timeout
             ldx     XERROR                  ; load error code
-            bne     @timeout                ; error > 0? timeout
+            beq     @evalblk1               ; received? evaluate block
+            jmp     @fail                   ; timeout? failure
             
-            lda     UART_RXREG              ; read UART data
-            cmp     XBLOCK                  ; compare with expected block #
-            beq     @block2
-            jmp     @fail                   ; data != expected block, failure         
+            ;- evaluate block number -------------------------------------------
+@evalblk1:  cmp     XBLOCK                  ; compare with expected block #
+            beq     @getblk2                ; equal? get block number 2
+            jmp     @fail                   ; not equal? failure                    
             
-@block2:    jsr     u_getc_1s               ; RX with 1 second timeout
+            ;- get inverted block ----------------------------------------------
+@getblk2:   jsr     uart_read               ; RX with 1 second timeout
             ldx     XERROR                  ; load error code
-            bne     @timeout                ; error > 0? timeout
+            beq     @getdata                ; received? get data
+            jmp     @fail                   ; timeout? fail
             
-            lda     UART_RXREG              ; read UART data to clear it
-            
-            ldy     #128                    ; 128 bytes of data per block            
-@data:      jsr     u_getc_1s               ; RX with 1 second timeout
+            ;- receive block (128 bytes) of data -------------------------------
+@getdata:   ldy     #0                      ; Y = byte counter          
+@dataloop:  jsr     uart_read               ; RX with 1 second timeout
             ldx     XERROR                  ; load error code
-            bne     @timeout                ; error > 0? timeout
+            bne     @fail                   ; timeout? failure
             
-            lda     UART_RXREG              ; read UART data
-            sta     (XDATA)                 ; store to RAM
+            sta     (XDATA), Y              ; write data memory
             
             clc
             adc     XCHKSUM
             sta     XCHKSUM                 ; checksum += data (no carry)
             
-            lda     XDATAL
+            iny                             ; byte counter++
+            bpl     @dataloop               ; counter < 128? keep getting data
+            
+            ;- increment XDATA by 128 bytes (one block) ------------------------
             clc
-            adc     #$01
+            lda     XDATAL
+            adc     #128
             sta     XDATAL
             lda     XDATAH
-            adc     #$00
-            sta     XDATAH                  ; increment 16-bit addr at DATA
+            adc     #0
+            sta     XDATAH                  ; XDATA += 128
             
-            dey                             ; byte counter--
-            bne     @data                   ; counter > 0? keep getting data
-            
-            lda     XDATAH                  ; load RAM address MSB
-            cmp     #$80                    ; are we outside user RAM?
-            beq     @toolarge               ; we are, failure
-            
-@chksum:    jsr     u_getc_1s               ; RX with 1 second timeout
+            ;- get and evaluate checksum ---------------------------------------
+@chksum:    jsr     uart_read               ; RX with 1 second timeout
             ldx     XERROR                  ; load error code
-            bne     @timeout                ; error > 0? timeout
+            bne     @fail                   ; timeout? fail
             
-            lda     UART_RXREG              ; read UART data
             cmp     XCHKSUM                 ; compare with computed checksum
             bne     @fail                   ; not equal? failure
             
+            ;- acknowledge reception -------------------------------------------
             lda     #ACK
-            jsr     uart_putc               ; send <ACK>
+            jsr     uart_write              ; send <ACK>
+            
             inc     XBLOCK                  ; increment block
             stz     XCHKSUM                 ; reset checksum
             
             bra     @start                  ; wait for another block
-
-@end:       lda     #ACK
-            jsr     uart_putc               ; send <ACK>
             
-            lda     #'$'
-            bios #1
+            ;- acknowledge EOT -------------------------------------------------
+@eot:       lda     #ACK
+            jsr     uart_write              ; send <ACK>
             
+            ;- completion message ----------------------------------------------         
+            ldx     #.HIBYTE(wrotemsg)
+            lda     #.LOBYTE(wrotemsg)
+            bios    #2                      ; wrote message
+            
+            lda     #$03           
+            jsr     printhex
             lda     #$00
-            dec     XBLOCK                  ; adjust blocks received by -1
-            lsr     XBLOCK                  ; divide by 2 (blocks-- in MSB)
-            ldx     XBLOCK                  ; save MSB to X
-            ror     A                       ; 16-bit division by two (X,A)
+            jsr     printhex                ; print 0300 to screen
             
-            jsr     printhex                ; print to screen
+            lda     #'-'
+            bios    #1
             
-            ldx     #.HIBYTE(complete_msg)
-            lda     #.LOBYTE(complete_msg)
-            bios    #2                      ; complete string
-            bra     @done
+            sec
+            lda     XDATAL
+            sbc     #1
+            sta     XDATAL
+            lda     XDATAH
+            sbc     #0
+            sta     XDATAH                  ; subtract one off XDATA
             
-@timeout:   ldx     #.HIBYTE(timeout_msg)
-            lda     #.LOBYTE(timeout_msg)
+            lda     XDATAH            
+            jsr     printhex
+            lda     XDATAL
+            jsr     printhex                ; print XDATA - 1 to screen
+            
+            lda     #LF
+            bios    #1
+            
+@exit:      jmp     getcmdln                ; get new command line
+            
+            ;- timeout message -------------------------------------------------
+@timeout:   ldx     #.HIBYTE(timeoutmsg)
+            lda     #.LOBYTE(timeoutmsg)
             bios    #2                      ; timeout string
-            bra     @done                   ; done
+            
+            bra     @exit                   ; done
 
-@toolarge:  ldx     #.HIBYTE(toolarge_msg)
-            lda     #.LOBYTE(toolarge_msg)
-            bios    #2                      ; file too large string
-            bra     @done                   ; done
-
-@fail:      ldx     #.HIBYTE(fail_msg)
-            lda     #.LOBYTE(fail_msg)
+            ;- failure message -------------------------------------------------
+@fail:      ldx     #.HIBYTE(failmsg)
+            lda     #.LOBYTE(failmsg)
             bios    #2                      ; failed string
             
-@done:      jmp     getcmdln
+            bra     @exit                   ; done
             
             
 ;===============================================================================
@@ -612,44 +593,15 @@ xmodem:     lda     #1                      ; first block = 1
 .endproc
 
 
-;= PURGE =======================================================================
-; Purges the UART input buffer.
+;= UART_READ ===================================================================
+; Reads a byte from the UART. Blocks for one second.
 ;
 ; Parameters: none
-; Returns:    none
+; Returns:    A = byte
 ;
-; Destroys:   A
+; Destroys:   A, XERROR
 
-.proc purge
-            
-            lda     #$80
-            sta     TMR_TIMER08
-            lda     #$F0
-            sta     TMR_TIMER16
-            lda     #$FA
-            sta     TMR_TIMER24
-            lda     #$02
-            sta     TMR_TIMER32             ; Timer set for 1 second
-            
-@loop:      lda     UART_RXREG              ; clear RXREG
-            lda     TMR_STATUS              ; read timer STATUS register
-            bit     #%00000001              ; test OVRFL flag
-            beq     @loop                   ; OVRFL == 0? loop
-            
-            rts
-
-.endproc
-
-
-;= U_GETC_1S ===================================================================
-; Purges the UART input buffer.
-;
-; Parameters: none
-; Returns:    none
-;
-; Destroys:   A, ERROR
-
-.proc u_getc_1s
+.proc uart_read
             
             stz     XERROR                  ; reset error code
             
@@ -679,21 +631,21 @@ xmodem:     lda     #1                      ; first block = 1
 .endproc
 
 
-;= UART_PUTC ===================================================================
+;= UART_WRITE ==================================================================
 ; Sends a byte to the UART.
 ;
-; Parameters: A = character
+; Parameters: A = byte
 ; Returns:    none
 ;
 ; Cycles (jsr->rts): 30 (assumes not busy)
 
-.proc uart_putc
+.proc uart_write
             
             pha                     ; save character
             
-@poll:      lda     UART_STATUS     ; read UART STATUS register
+@busy:      lda     UART_STATUS     ; read UART STATUS register
             bit     #UART_TXBUSY    ; test TXBUSY flag
-            bne     @poll           ; TXBUSY == 1?
+            bne     @busy           ; TXBUSY == 1?
             
             pla                     ; restore character
             sta     UART_TXREG      ; send it to UART
@@ -711,17 +663,17 @@ xmodem:     lda     #1                      ; first block = 1
 
 ;= STRINGS =====================================================================
 
-invcmd:     .BYTE "invalid command", LF, NUL
+invalidmsg: .BYTE "invalid", LF, NUL
 
 helpmsg:    .BYTE "dump", TAB, "$[address]", LF
-            .BYTE "enter", TAB, "=address [byte]", LF
-            .BYTE "go", TAB, "@address", LF
+            .BYTE "enter", TAB, "=[address]", LF
+            .BYTE "go", TAB, "g", LF
             .BYTE "help", TAB, "?", LF
-            .BYTE "xmodem", TAB, ">address", LF, NUL
+            .BYTE "xmodem", TAB, "x", LF, NUL
 
-timeout_msg:  .BYTE "timeout", LF, NUL
-fail_msg:     .BYTE "failed", LF, NUL
-complete_msg: .BYTE " bytes received", LF, NUL
-toolarge_msg: .BYTE "file too large", LF, NUL
+wrotemsg:   .BYTE "received ", NUL
+timeoutmsg: .BYTE "timeout", LF, NUL
+failmsg:    .BYTE "failed", LF, NUL
+
 
 .END
