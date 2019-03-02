@@ -47,7 +47,7 @@
 ;= CONSTANTS ===================================================================
 
             ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
-            CMDMAX = 5                              ; limit input 5 total chars
+            CMDMAX = 78                             ; limit to a row of chars
 
 
 ;===============================================================================
@@ -105,6 +105,8 @@ getcmdln:   lda     #'-'
             beq     @bs                 ; backspace key? process
             cmp     #LF
             beq     @lf                 ; line feed? process
+            cmp     #TAB
+            beq     @getkey             ; tab? ignore
             
             cpx     #CMDMAX
             beq     @getkey             ; ignore if input > command line maximum
@@ -157,7 +159,7 @@ parsecmdln: lda     CMDLN               ; A = first character of command line
             cmp     #'x'
             beq     @xmodem             ; x? xmodem
             
-@getaddr:   stz     R0                  ; R1,R0 will be temporary address
+            stz     R0                  ; R1,R0 will be temporary address
             stz     R1
             
             ;- convert ASCII character to hexadecimal --------------------------
