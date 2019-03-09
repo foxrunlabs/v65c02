@@ -196,8 +196,7 @@ UART_RXREG  = UART + 4
 ;- device 3 --------------------------------------------------------------------
 KBD         = $BFB8
 KBD_STATUS  = KBD + 0
-KBD_RXREG   = KBD + 1
-KBD_TXREG   = KBD + 2
+KBD_DATA    = KBD + 1
 
 ;- device 4 --------------------------------------------------------------------
 TMR         = $BFC0
@@ -236,7 +235,7 @@ VGA_EN      = %00000001                 ; EN bit of VGA STATUS register
 VGA_CURS    = %00000010                 ; CURS bit mask for VGA STATUS register
 
 ;- keyboard status register bits -----------------------------------------------
-KBD_DRDY    = %00000001                 ; data ready status bit
+KBD_FULL    = %00000001                 ; keyboard buffer full bit
 KBD_RXERR   = %00000010                 ; receive error
 KBD_TXBUSY  = %00000100                 ; transmit busy status bit
 KBD_TXERR   = %00001000                 ; transmit error

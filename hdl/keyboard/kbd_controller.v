@@ -37,7 +37,7 @@ module KeyboardController
     input  wire       en_i,         // controller bus select
     input  wire       we_i,         // write enable
     
-    input  wire [1:0] regsel_i,     // 2-bit register select
+    input  wire       regsel_i,     // 1-bit register select
     input  wire [7:0] din_i,        // 8-bit register data input
     output wire [7:0] dout_o,       // 8-bit register data output
     
@@ -48,9 +48,8 @@ module KeyboardController
     
 /* CONTROLLER REGISTERS *******************************************************/
     
-    localparam STATUS = 2'b00,
-               RXREG  = 2'b01,
-               TXREG  = 2'b10;
+    localparam STATUS = 1'b0,
+               DATA   = 1'b1;
     
     wire [7:0] status;              // STATUS register bits
     wire       shift;               // combination of left and right shift keys
@@ -58,7 +57,7 @@ module KeyboardController
     
     assign shift  = lshift_ff | rshift_ff;
     assign status = {1'b0, alt_ff, ctrl_ff, shift, tx_err, tcvr_busy, rx_err,
-                     data_rdy_ff};
+                     full_ff};
     
     // read logic
     initial dout_reg = 8'h00;
@@ -66,7 +65,7 @@ module KeyboardController
         if(en_i)
             case(regsel_i)
                 STATUS:  dout_reg <= #1 status;
-                RXREG:   dout_reg <= #1 rxreg_reg;
+                DATA:    dout_reg <= #1 rxreg_reg;
                 default: dout_reg <= #1 8'h00;
             endcase
     
@@ -83,7 +82,7 @@ module KeyboardController
     wire       rx_err;                  // receive error
     wire [7:0] rx_data;                 // received data
     
-    assign tcvr_we = en_i & we_i & (regsel_i == TXREG);
+    //assign tcvr_we = en_i & we_i & (regsel_i == DATA);
     
     PS2Transceiver PS2Transceiver
         (
@@ -91,8 +90,8 @@ module KeyboardController
         .rst_i       (rst_i),
         .ps2_clk_io  (ps2_clk_io),
         .ps2_data_io (ps2_data_io),
-        .we_i        (tcvr_we),
-        .din_i       (din_i),
+        .we_i        (1'b0),            // disable TX portion
+        .din_i       (8'h00),           // disable TX portion
         .tx_busy_o   (tcvr_busy),
         .tx_err_o    (tx_err),
         .rx_stb_o    (rx_stb),
@@ -252,23 +251,22 @@ module KeyboardController
     end
     
     
-/* DATA READY BIT *************************************************************/
+/* FULL BIT *******************************************************************/
     
-    wire data_rdy_rst;
-    wire data_rdy_set;
-    reg  data_rdy_ff;
-    reg  data_rdy_ns;
+    wire full_rst;
+    wire full_set;
+    reg  full_ff;
+        
+    assign full_set = rxreg_en;                             // same criteria
+    assign full_rst = en_i & (~we_i) & (regsel_i == DATA);  // data read
     
-    assign data_rdy_set = rxreg_en;                     // same criteria
-    assign data_rdy_rst = en_i & (regsel_i == RXREG);     // receive register read
-    
-    // set if data ready, clear if RXREG is read
-    initial data_rdy_ff = 1'b0;
+    // set if receive buffer full, clear if receive buffer read
+    initial full_ff = 1'b0;
     always @(posedge clk_i) begin
-        if(data_rdy_set)
-            data_rdy_ff <= #1 1'b1;
-        else if(data_rdy_rst)
-            data_rdy_ff <= #1 1'b0;
+        if(full_set)
+            full_ff <= #1 1'b1;
+        else if(full_rst)
+            full_ff <= #1 1'b0;
     end
     
 endmodule

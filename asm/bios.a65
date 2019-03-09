@@ -110,7 +110,7 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             sta     KEYMAPH
             
             ;- clear keyboard buffer -------------------------------------------
-            lda     KBD_RXREG
+            lda     KBD_DATA
             
             ;- print headers to the screen -------------------------------------
 @headers:   ldx     #.HIBYTE(biosver)
@@ -392,18 +392,18 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
 .proc getkey
             
             lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #KBD_DRDY           ; test DATA_RDY
-            beq     getkey              ; DATA_RDY == 0? keep polling
+            bit     #KBD_FULL           ; test FULL bit
+            beq     getkey              ; FULL == 0? keep polling
             
             lda     KBD_STATUS          ; retrieve keyboard STATUS register
             and     #KBD_SHIFT          ; isolate shift bit
             asl     A
             asl     A
             asl     A                   ; STATUS << 3
-            ora     KBD_RXREG           ; scan code | (STATUS << 3)
+            ora     KBD_DATA            ; scan code | (STATUS << 3)
             tax
             lda     keymap, X           ; A = ASCII
-            ldx     KBD_RXREG           ; X = scan code
+            ldx     KBD_DATA            ; X = scan code
             
             rts
 
