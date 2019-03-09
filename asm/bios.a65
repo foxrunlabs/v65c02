@@ -444,22 +444,20 @@ irq:        pha                         ; save A
             lda     $0104, X            ; stack: program counter low byte
             sta     R0                  ; (R0) = program counter return location
             
-            ;- extract BRK padding byte for error code -------------------------
+            ;- calculate BRK address and display on SSEG -----------------------
             sec
-            sbc     #1
+            sbc     #2
             sta     R0
             lda     R1
             sbc     #0
-            sta     R1                  ; (R0) = PC - 1 = error code (pad byte)
+            sta     R1                  ; R1,R0 = address of BRK instruction
             
-            lda     #$C0                ; display error code on SSEG display
-            sta     SSEG_BYTE3
-            lda     #$DE
-            sta     SSEG_BYTE2
-            lda     (R0)                ; padding byte = error code
+            lda     R1
+            sta     SSEG_BYTE1
+            lda     R0
             sta     SSEG_BYTE0
-            lda     #%11110011          ; Bytes 0, 2, and 3 turned on
-            sta     SSEG_DIGITS         ; display "C0DE XX" on SSEG (XX = code)
+            lda     #%00001111          ; bytes 0 and 1 turned on
+            sta     SSEG_DIGITS         ; display address of BRK instruction
             
 @halt:      bra     @halt               ; loop forever
             
