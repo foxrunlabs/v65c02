@@ -17,12 +17,12 @@
 
 ;===============================================================================
 ; Program   : v65C02 BIOS
-; File Name : ascii.inc
+; File Name : v65C02.inc
 ; Project   : v65C02 8-bit Computer
 ; Author    : Ryan Clarke
 ; E-mail    : kj6msg@icloud.com
 ;===============================================================================
-; Purpose : BIOS constant definitions.
+; Purpose : Constant definitions for the v65C02 BIOS.
 ;===============================================================================
 
 
@@ -59,16 +59,16 @@ ATTR    = $12               ; text attribute
 VRAM    = $13               ; video RAM pointer
 VRAML   = $13               ; video RAM pointer LSB
 VRAMH   = $14               ; video RAM pointer MSB
-STR     = $15               ; string pointer
+STR     = $15               ; string pointer (puts routine)
 STRL    = $15               ; string pointer LSB
 STRH    = $16               ; string pointer MSB
 CURS    = $17               ; cursor address
 CURSL   = $17               ; cursor address LSB
 CURSH   = $18               ; cursor address MSB
-CURSTMP = $19               ; cursor temp
-SCROLL  = $1A
-SCROLLL = $1A
-SCROLLH = $1B
+CURSTMP = $19               ; cursor temp (gotoxy routine)
+SCROLL  = $1A               ; next line video RAM pointer (scrolldn routine)
+SCROLLL = $1A               ; next line video RAM pointer LSB
+SCROLLH = $1B               ; next line video RAM pointer MSB
 
 ;- call table address ----------------------------------------------------------
 BIOSTL  = $1C               ; call table (LSB) pointer
@@ -87,20 +87,20 @@ KEYMAPH = $21               ; keymap pointer MSB
 ;= ROM MONITOR =================================================================
 
 ;- ROM monitor -----------------------------------------------------------------
-ADDR    = $22
-ADDRL   = $22
-ADDRH   = $23
+MODE    = $22               ; store mode: 0 = addres, 1 = byte
+ADDR    = $23               ; address pointer
+ADDRL   = $23               ; address pointer LSB
+ADDRH   = $24               ; address pointer MSB
 
-BUF     = $0200
-CMDLN   = $0200
+XBLOCK  = $25               ; XMODEM block number
+XCHKSUM = $26               ; XMODEM checksum
+XDATA   = $27               ; XMODEM data pointer
+XDATAL  = $27               ; XMODEM data pointer LSB
+XDATAH  = $28               ; XMODEM data pointer MSB
+XERROR  = $29               ; XMODEM error
 
-;- XMODEM receiver -------------------------------------------------------------
-XBLOCK  = $24
-XCHKSUM = $25
-XDATA   = $26
-XDATAL  = $26
-XDATAH  = $27
-XERROR  = $28
+BUF     = $30               ; buffer address
+CMDLN   = $30               ; command line address
 
 
 ;===============================================================================
@@ -109,18 +109,39 @@ XERROR  = $28
 
 ;= ASCII Character Constants ===================================================
 
-NUL = $00
-SOH = $01
-EOT = $04
-ACK = $06
-BS  = $08
-TAB = $09
-LF  = $0A
-CR  = $0D
-NAK = $15
-CAN = $18
-ESC = $1B
-DEL = $7F
+NUL  = $00
+SOH  = $01
+_STX = $02
+ETX  = $03
+EOT  = $04
+ENQ  = $05
+ACK  = $06
+BEL  = $07
+BS   = $08
+TAB  = $09
+LF   = $0A
+VT   = $0B
+FF   = $0C
+CR   = $0D
+SO   = $0E
+SI   = $0F
+DLE  = $10
+DC1  = $11
+DC2  = $12
+DC3  = $13
+DC4  = $14
+NAK  = $15
+SYN  = $16
+ETB  = $17
+CAN  = $18
+EM   = $19
+SUB  = $1A
+ESC  = $1B
+FS   = $1C
+GS   = $1D
+RS   = $1E
+US   = $1F
+DEL  = $7F
 
 
 ;= TEXT COLORS =================================================================
@@ -186,31 +207,53 @@ TMR_TIMER16 = TMR + 2
 TMR_TIMER24 = TMR + 3
 TMR_TIMER32 = TMR + 4
 
+;- device 5 --------------------------------------------------------------------
+DEVICE5     = $BFC8
+
+;- device 6 --------------------------------------------------------------------
+DEVICE6     = $BFD0
+
+;- device 7 --------------------------------------------------------------------
+DEVICE7     = $BFD8
+
+;- device 8 --------------------------------------------------------------------
+DEVICE8     = $BFE0
+
+;- device 9 --------------------------------------------------------------------
+DEVICE9     = $BFE8
+
+;- device 10 -------------------------------------------------------------------
+DEVICE10    = $BFF0
+
+;- device 11 -------------------------------------------------------------------
+DEVICE11    = $BFF8
+
 
 ;= DEVICE REGISTERS ============================================================
 
 ;- VGA status register bits ----------------------------------------------------
-VGA_EN   = %00000001                    ; EN bit of VGA STATUS register
-VGA_CURS = %00000010                    ; CURS bit mask for VGA STATUS register
+VGA_EN      = %00000001                 ; EN bit of VGA STATUS register
+VGA_CURS    = %00000010                 ; CURS bit mask for VGA STATUS register
 
 ;- keyboard status register bits -----------------------------------------------
-KBD_DRDY   = %00000001                  ; data ready status bit
-KBD_RXERR  = %00000010                  ; receive error
-KBD_TXBUSY = %00000100                  ; transmit busy status bit
-KBD_TXERR  = %00001000                  ; transmit error
-KBD_SHIFT  = %00010000                  ; shift key status bit
-KBD_CTRL   = %00100000                  ; control key status bit
-KBD_ALT    = %01000000                  ; alt key status bit
+KBD_DRDY    = %00000001                 ; data ready status bit
+KBD_RXERR   = %00000010                 ; receive error
+KBD_TXBUSY  = %00000100                 ; transmit busy status bit
+KBD_TXERR   = %00001000                 ; transmit error
+KBD_SHIFT   = %00010000                 ; shift key status bit
+KBD_CTRL    = %00100000                 ; control key status bit
+KBD_ALT     = %01000000                 ; alt key status bit
 
 ;- UART status register bits ---------------------------------------------------
-UART_TXBUSY = %00000001
-UART_RXFULL = %00000010
+UART_TXBUSY = %00000001                 ; UART transmit busy
+UART_RXFULL = %00000010                 ; UART receive buffer full
 
 ;- timer status register bits --------------------------------------------------
-TMR_OVRFL = %00000001
+TMR_OVRFL   = %00000001                 ; timer overflow
 
 
 ;= UART baud rate generator values ---------------------------------------------
+
 B110     = 28408
 B300     = 10416
 B600     = 5207

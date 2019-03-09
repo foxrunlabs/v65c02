@@ -28,7 +28,7 @@
 
 .PC02
 
-.INCLUDE    "bios.inc"
+.INCLUDE    "v65C02.inc"
 
 .IMPORT     __VRAM_START__
 .IMPORT     __VRAM_SIZE__
@@ -47,7 +47,7 @@
 ;= CONSTANTS ===================================================================
 
             ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
-            CMDMAX = 78                             ; limit to a row of chars
+            CMDMAX = 79                             ; CMDLN length (minus NUL)
 
 
 ;===============================================================================
@@ -63,13 +63,13 @@ monitor:    lda     #VGA_CURS           ; CURS bit mask
             
             stz     CMDLN               ; reset command line buffer
             
-            stz     ADDRL               ; clear address LSB
-            stz     ADDRH               ; clear address MSB
+            stz     ADDRL
+            stz     ADDRH               ; (ADDR) -> $0000
             
             lda     #.HIBYTE(B1562500)
             sta     UART_BRGH
             lda     #.LOBYTE(B1562500)
-            sta     UART_BRGL           ; UART 1,562,500 baud
+            sta     UART_BRGL           ; UART set to 1,562,500 baud
             
             
 ;= GET COMMAND LINE ============================================================
@@ -80,24 +80,12 @@ getcmdln:   lda     #'-'
             ldx     #0                  ; X = string index
             
             ;- get keystroke ---------------------------------------------------
-@getkey:    lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #KBD_DRDY           ; test DATA_RDY
-            beq     @getkey             ; DATA_RDY == 0? keep polling
-            
-            lda     KBD_RXREG           ; read the scan code
-            tay                         ; Y = index into keyboard map
-            
-            ;- check shift key -------------------------------------------------
-            lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #KBD_SHIFT          ; test SHIFT
-            beq     @evalkey            ; set? nope
-            
-            tya
-            ora     #$80                ; shifted, so turn on bit 7
-            tay            
+@getkey:    phx
+            bios    #5                  ; wait for keystroke and read
+            plx
             
             ;- evaluate keystroke ----------------------------------------------
-@evalkey:   lda     (KEYMAP), Y         ; convert to ASCII
+            cmp     #NUL
             beq     @getkey             ; NUL? ignore
             cmp     #ESC
             beq     @esc                ; escape key? process
@@ -150,7 +138,15 @@ getcmdln:   lda     #'-'
             
 ;= PARSE COMMAND LINE ==========================================================
             
-parsecmdln: lda     CMDLN               ; A = first character of command line
+parsecmdln: stz     MODE                ; address mode (0)
+            stz     R0
+            stz     R1                  ; R1,R0 = 16-bit address or data
+            
+            ldx     #$FF                ; X = command line string index
+            ldy     #0                  ; Y = digit counter
+            
+            ;- check the first character ---------------------------------------
+            lda     CMDLN               ; A = first character of command line
             beq     getcmdln            ; NUL? get another command line
             cmp     #'g'
             beq     @go                 ; g? go
@@ -158,15 +154,19 @@ parsecmdln: lda     CMDLN               ; A = first character of command line
             beq     @help               ; help? help
             cmp     #'x'
             beq     @xmodem             ; x? xmodem
+            bra     @convert
             
-            stz     R0                  ; R1,R0 will be temporary address
-            stz     R1
+            ;- jump table ------------------------------------------------------
+@go:        jmp     go
+@help:      jmp     help
+@xmodem:    jmp     xmodem
             
             ;- convert ASCII character to hexadecimal --------------------------
-            ldx     #0                  ; X = command line string index
-@convaddr:  inx                         ; ++X
+@convert:   inx                         ; ++string index
             lda     CMDLN, X            ; A = command line character
-            beq     @chkaddr            ; NUL? check address
+            beq     @chkmode            ; NUL? check mode
+            cmp     #' '
+            beq     @chkmode            ; space? check mode
                         
             eor     #'0'                ; map digits to 0-9
             cmp     #10                 ; check if within 0-9
@@ -188,26 +188,65 @@ parsecmdln: lda     CMDLN               ; A = first character of command line
             asl     R0
             rol     R1                  ; R1,R0 << 4
             
-            ora     R0                  ; R1,R0 | A
+            ora     R0                  ; R1,R0 | hex digit
             sta     R0
-            bra     @convaddr           ; keep converting
             
-            ;- check if address entered ----------------------------------------
-@chkaddr:   cpx     #1
-            beq     @evalcmd            ; no address entered? evaluate command
+            iny                         ; digit counter++
+            cpy     #5
+            bcs     @invalid            ; maximum 16-bit input
+            bra     @convert            ; keep converting
             
-            ;- save parsed address ---------------------------------------------
-            lda     R0
+            ;- check mode ------------------------------------------------------
+@chkmode:   cpy     #0
+            beq     @invalid            ; no digits entered? invalid
+            
+            lda     MODE                ; A = mode
+            beq     @saveaddr           ; address mode (0)? save address
+            
+            ;- store bytes at saved address ------------------------------------
+            lda     R0                  ; A = LSB
+@store:     sta     (ADDR)              ; store at (ADDR)
+            
+            clc
+            lda     ADDRL
+            adc     #1
             sta     ADDRL
+            lda     ADDRH
+            adc     #0
+            sta     ADDRH               ; ADDR = ADDR + 1
+            
+            cpy     #3
+            bcc     @next               ; only 8-bit entry?
+            
+            lda     R1                  ; A = MSB
+            ldy     #0                  ; reset digit counter
+            bra     @store              ; store this one too
+            
+            ;- save entered address --------------------------------------------
+@saveaddr:  lda     R0
+            sta     ADDRL
+            pha                         ; save ADDRL
             lda     R1
             sta     ADDRH               ; ADDR = R1,R0
+            pha                         ; save ADDRH
             
-            ;- evaluate command ------------------------------------------------
-@evalcmd:   lda     CMDLN               ; A = first character of command line
-            cmp     #'$'
-            beq     @dump               ; $? dump
-            cmp     #'='
-            beq     @enter              ; =? enter
+@next:      stz     R0
+            stz     R1                  ; reset R0 and R1
+            ldy     #0                  ; reset digit counter
+            inc     MODE
+            
+            lda     CMDLN, X            ; A = last parsed character
+            bne     @convert            ; not NUL? keep converting
+            
+            pla
+            sta     ADDRH               ; restore ADDRH for dump
+            pla
+            sta     ADDRL               ; restore ADDRL for dump
+            
+            lda     MODE
+            cmp     #1
+            beq     dump                ; only one increment of MODE, so dump
+            jmp     getcmdln
             
             ;- invalid command -------------------------------------------------
 @invalid:   ldx     #.HIBYTE(invalidmsg)
@@ -217,24 +256,7 @@ parsecmdln: lda     CMDLN               ; A = first character of command line
             jmp     getcmdln            ; go get another one command line
             
             
-;===============================================================================
-; ROM MONITOR COMMAND ROUTINES
-;===============================================================================
-
-.CODE
-
-;= JUMP TABLE ==================================================================
-            
-@dump:      jmp     dump
-@enter:     jmp     enter
-@go:        jmp     go
-@help:      jmp     help
-@xmodem:    jmp     xmodem
-            
-            
 ;= DUMP ========================================================================
-; Dump 16 bytes of data to the screen from a specified address. Automatically
-; increment the stored address by 16 after complete.
             
 dump:       ;- save snapshot of memory -----------------------------------------
             ldy     #15
@@ -246,7 +268,6 @@ dump:       ;- save snapshot of memory -----------------------------------------
             ;- print address ---------------------------------------------------
             lda     ADDRH               ; MSB first
             jsr     printhex            ; print to screen
-            
             lda     ADDRL               ; LSB next
             jsr     printhex            ; print to screen
             
@@ -297,38 +318,16 @@ dump:       ;- save snapshot of memory -----------------------------------------
             lda     #LF
             bios    #1                  ; line feed
             
-            ;- incremement address ---------------------------------------------
-            lda     ADDRL
-            clc
-            adc     #16
-            sta     ADDRL
-            lda     ADDRH
-            adc     #0
-            sta     ADDRH               ; ADDR = ADDR + 16
-            
             jmp     getcmdln
             
             
-;= ENTER =======================================================================
-; Writes a byte at a specified address.
-            
-enter:      jmp     getcmdln
-            
-            
 ;= GO ==========================================================================
-; Executes code at $0300 and then resets monitor.
             
-.proc go
-            
-            jsr     $0300               ; execute at $0300
-            
+go:         jsr     $0300               ; execute at $0300
             jmp     monitor             ; reset monitor
-            
-.endproc
             
             
 ;= HELP ========================================================================
-; Prints help message.
             
 help:       ldx     #.HIBYTE(helpmsg)
             lda     #.LOBYTE(helpmsg)
@@ -338,7 +337,6 @@ help:       ldx     #.HIBYTE(helpmsg)
             
             
 ;= XMODEM ======================================================================
-; Receives a file from the UART via the XMODEM protocol and stores it at $0300.
             
 xmodem:     lda     #1                      ; first block = 1
             sta     XBLOCK
@@ -346,7 +344,7 @@ xmodem:     lda     #1                      ; first block = 1
             
             lda     #$03
             sta     XDATAH
-            stz     XDATAL                  ; (XDATA) points to $0300
+            stz     XDATAL                  ; (XDATA) -> $0300
             
             ;- purge the UART RXREG for one second -----------------------------
             lda     #$80
@@ -444,7 +442,7 @@ xmodem:     lda     #1                      ; first block = 1
             ;- completion message ----------------------------------------------         
             ldx     #.HIBYTE(wrotemsg)
             lda     #.LOBYTE(wrotemsg)
-            bios    #2                      ; wrote message
+            bios    #2                      ; wrote address range message
             
             lda     #$03           
             jsr     printhex
@@ -541,7 +539,7 @@ xmodem:     lda     #1                      ; first block = 1
             sta     VRAML               ; (VRAM) = 11-bit cursor address
             
             asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
-            rol     VRAMH               ; A = $0001 << 1
+            rol     VRAMH
             lda     VRAMH
             ora     #.HIBYTE(__VRAM_START__)
             sta     VRAMH               ; (VRAM) = 16-bit VRAM address
@@ -565,7 +563,7 @@ xmodem:     lda     #1                      ; first block = 1
 ; Prints an 8-bit byte in hexadecimal format to the screen.
 ;
 ; Parameters: A = byte
-; Returns:    nothing
+; Returns:    none
 ;
 ; Destroys: X, Y
 
@@ -638,8 +636,6 @@ xmodem:     lda     #1                      ; first block = 1
 ;
 ; Parameters: A = byte
 ; Returns:    none
-;
-; Cycles (jsr->rts): 30 (assumes not busy)
 
 .proc uart_write
             
@@ -667,8 +663,8 @@ xmodem:     lda     #1                      ; first block = 1
 
 invalidmsg: .BYTE "invalid", LF, NUL
 
-helpmsg:    .BYTE "dump", TAB, "$[address]", LF
-            .BYTE "enter", TAB, "=[address]", LF
+helpmsg:    .BYTE "dump", TAB, "address", LF
+            .BYTE "enter", TAB, "address list", LF
             .BYTE "go", TAB, "g", LF
             .BYTE "help", TAB, "?", LF
             .BYTE "xmodem", TAB, "x", LF, NUL

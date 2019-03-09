@@ -28,7 +28,7 @@
 
 .PC02
 
-.INCLUDE    "bios.inc"
+.INCLUDE    "v65C02.inc"
 
 .IMPORT     __VRAM_START__
 .IMPORT     __VRAM_SIZE__
@@ -38,11 +38,9 @@
 
 ;= CONSTANTS ===================================================================
 
-.DEFINE     VERSION .CONCAT("v65C02 BIOS v", "2.0.0-alpha.", .STRING(.TIME))
+.DEFINE     VERSION .CONCAT("v65C02 BIOS v", "2.0.0")
 
             ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
-
-.OUT VERSION
 
 
 ;===============================================================================
@@ -115,8 +113,8 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     KBD_RXREG
             
             ;- print headers to the screen -------------------------------------
-@headers:   ldx     #.HIBYTE(bios_ver)
-            lda     #.LOBYTE(bios_ver)
+@headers:   ldx     #.HIBYTE(biosver)
+            lda     #.LOBYTE(biosver)
             jsr     puts                ; BIOS header
             
             ldx     #.HIBYTE(copyright)
@@ -196,7 +194,7 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             bcs     @lf                 ; column >= 72? new line
             
             and     #%11111000          ; clear lower three bits of column
-            adc     #8                  ; add 8 to advance to next tab stop
+            adc     #8                  ; advance to next tab stop (carry clear)
             tax                         ; X = new column
             lda     ROW
             bra     @setcurs
@@ -221,7 +219,7 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             sta     VRAML               ; (VRAM) = 11-bit cursor address
             
             asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
-            rol     VRAMH               ; A = $0001 << 1
+            rol     VRAMH
             lda     VRAMH
             ora     #.HIBYTE(__VRAM_START__)
             sta     VRAMH               ; (VRAM) = 16-bit VRAM address
@@ -384,6 +382,34 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
 .endproc
 
 
+;= #5 GETKEY ===================================================================
+; Wait for keystroke and read.
+;
+; Parameters: none
+; Returns:    X = scan code
+;             A = ASCII or zero
+
+.proc getkey
+            
+            lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            bit     #KBD_DRDY           ; test DATA_RDY
+            beq     getkey              ; DATA_RDY == 0? keep polling
+            
+            lda     KBD_STATUS          ; retrieve keyboard STATUS register
+            and     #KBD_SHIFT          ; isolate shift bit
+            asl     A
+            asl     A
+            asl     A                   ; STATUS << 3
+            ora     KBD_RXREG           ; scan code | (STATUS << 3)
+            tax
+            lda     keymap, X           ; A = ASCII
+            ldx     KBD_RXREG           ; X = scan code
+            
+            rts
+
+.endproc
+
+
 ;===============================================================================
 ; INTERRUPTS
 ;===============================================================================
@@ -413,9 +439,9 @@ irq:        pha                         ; save A
             bit     #%00010000          ; B flag set?
             beq     @exit               ; nope, must be an IRQ
             
-            lda     $0105, X            ; stack: program counter high bit
+            lda     $0105, X            ; stack: program counter high byte
             sta     R1
-            lda     $0104, X            ; stack: program counter low bit
+            lda     $0104, X            ; stack: program counter low byte
             sta     R0                  ; (R0) = program counter return location
             
             ;- extract BRK padding byte for error code -------------------------
@@ -472,17 +498,19 @@ bios_tbl_l: .BYTE .LOBYTE(softrst-1)
             .BYTE .LOBYTE(puts-1)
             .BYTE .LOBYTE(gotoxy-1)
             .BYTE .LOBYTE(scrolldn-1)
+            .BYTE .LOBYTE(getkey-1)
 
 bios_tbl_h: .BYTE .HIBYTE(softrst-1)
             .BYTE .HIBYTE(putch-1)
             .BYTE .HIBYTE(puts-1)
             .BYTE .HIBYTE(gotoxy-1)
             .BYTE .HIBYTE(scrolldn-1)
+            .BYTE .HIBYTE(getkey-1)
 
 
 ;= STRINGS =====================================================================
 
-bios_ver:   .BYTE VERSION, LF, NUL
+biosver:    .BYTE VERSION, LF, NUL
 copyright:  .BYTE "Copyright (C) 2018 Ryan Clarke", LF, NUL
 nodisk:     .BYTE "SD card not found.", LF, NUL
 loading:    .BYTE "Loading ROM monitor.", LF, NUL

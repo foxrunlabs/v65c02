@@ -26,8 +26,8 @@ all : $(BIOS)
 %.o : %.a65
 	$(AS) $(ASFLAGS) -o $@ $<
 
-bios.o : bios.a65 include/bios.inc
-monitor.o : monitor.a65 include/bios.inc
+bios.o : bios.a65 include/v65C02.inc
+monitor.o : monitor.a65 include/v65C02.inc
 
 $(BIOS) : $(OBJECTS)
 	$(LD) $(LDFLAGS) $^
