@@ -1,0 +1,61 @@
+;===============================================================================
+;Copyright (C) 2018 Ryan Clarke
+;
+;This program is free software (firmware): you can redistribute it and/or modify
+;it under the terms of the GNU General Public License as published by
+;the Free Software Foundation, either version 3 of the License, or
+;(at your option) any later version.
+;
+;This program is distributed in the hope that it will be useful,
+;but WITHOUT ANY WARRANTY; without even the implied warranty of
+;MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;GNU General Public License for more details.
+;
+;You should have received a copy of the GNU General Public License
+;along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;===============================================================================
+
+;===============================================================================
+; Program   : v65C02 Standard Library
+; File Name : v65C02.a65
+; Project   : v65C02 8-bit Computer
+; Author    : Ryan Clarke
+; E-mail    : kj6msg@icloud.com
+;===============================================================================
+; Purpose : Standard library for the v65C02 8-bit computer.
+;===============================================================================
+
+
+.PC02
+
+.INCLUDE    "v65C02.inc"
+
+.EXPORT     bioscall
+
+
+;= BIOSCALL ====================================================================
+; Calls a BIOS routine.
+;
+; Parameters: Y = BIOS call number
+;             X = parameter 1 (for two parameter calls)
+;             A = parameter 2 (parameter 1 for single parameter calls)
+; Returns:    none
+;
+; Destroys:   R0
+
+.CODE
+
+.proc bioscall
+            
+            sta     R0                  ; save parameter 2
+            
+            lda     (BIOSTH), Y         ; push high byte 1st
+            pha
+            lda     (BIOSTL), Y         ; push low byte 2nd (popped 1st on RTS)
+            pha
+            
+            lda     R0                  ; restore parameter 2
+                        
+            rts                         ; jump to BIOS sub-routine
+
+.endproc
