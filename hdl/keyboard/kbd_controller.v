@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /*******************************************************************************
 Module Name : KeyboardController
 File Name   : kbd_controller.v
-Dependences : PS2Transceiver
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -28,11 +27,13 @@ E-mail      : kj6msg@icloud.com
 Purpose : PS/2 keyboard controller for the v65C02 8-bit Computer.
 *******************************************************************************/
 
+// TODO: implement a control interface, which bypasses the PS/2-to-ASCII
+// module (disables it), so that we can write and read to the PS/2 keyboard.
+
 
 module KeyboardController
     (
     input  wire       clk_i,        // CPU clock
-    input  wire       rst_i,        // reset
     
     input  wire       en_i,         // controller bus select
     input  wire       we_i,         // write enable
@@ -52,221 +53,168 @@ module KeyboardController
                DATA   = 1'b1;
     
     wire [7:0] status;              // STATUS register bits
-    wire       shift;               // combination of left and right shift keys
     reg  [7:0] dout_reg;            // register output
     
-    assign shift  = lshift_ff | rshift_ff;
-    assign status = {1'b0, alt_ff, ctrl_ff, shift, tx_err, tcvr_busy, rx_err,
-                     full_ff};
+    assign status = {4'b0000, tx_err, tx_busy, rx_parity_err, rx_full_ff};
     
     // read logic
     initial dout_reg = 8'h00;
     always @(posedge clk_i)
         if(en_i)
-            case(regsel_i)
-                STATUS:  dout_reg <= #1 status;
-                DATA:    dout_reg <= #1 rxreg_reg;
-                default: dout_reg <= #1 8'h00;
-            endcase
+            if(~we_i)
+                case(regsel_i)
+                    STATUS:  dout_reg <= #1 status;
+                    DATA:    dout_reg <= #1 rx_data_reg;
+                    default: dout_reg <= #1 8'h00;
+                endcase
     
     // output logic
     assign dout_o = dout_reg;
     
     
-/* TRANSCEIVER ****************************************************************/
-
-    wire       tcvr_we;                 // write enable    
-    wire       tcvr_busy;               // busy flag
-    wire       tx_err;                  // transmit error
-    wire       rx_stb;                  // receive data complete strobe
-    wire       rx_err;                  // receive error
-    wire [7:0] rx_data;                 // received data
+/* PS/2 CLOCK INPUT SYNCHRONIZER **********************************************/
     
-    //assign tcvr_we = en_i & we_i & (regsel_i == DATA);
+    reg ps2_clkin_async_ff;     // PS/2 clock input synchronizer
+    reg ps2_clkin_sync_ff;      // PS/2 clock input synchronizer
     
-    PS2Transceiver PS2Transceiver
+    // PS/2 clock input synchronizer
+    initial ps2_clkin_async_ff = 1'b1;
+    initial ps2_clkin_sync_ff  = 1'b1;
+    always @(posedge clk_i) begin
+        ps2_clkin_async_ff <= #1 ps2_clk_io;
+        ps2_clkin_sync_ff  <= #1 ps2_clkin_async_ff;
+    end
+    
+    
+/* PS/2 DATA INPUT SYNCHRONIZER ***********************************************/
+    
+    reg ps2_din_async_ff;       // PS/2 data input synchronizer
+    reg ps2_din_sync_ff;        // PS/2 data input synchronizer
+    
+    // PS/2 data input synchronizer
+    initial ps2_din_async_ff = 1'b1;
+    initial ps2_din_sync_ff  = 1'b1;
+    always @(posedge clk_i) begin
+        ps2_din_async_ff <= #1 ps2_data_io;
+        ps2_din_sync_ff  <= #1 ps2_din_async_ff;
+    end
+    
+    
+/* PS/2 CLOCK INPUT EDGE DETECTORS ********************************************/
+    
+    reg  ps2_clkin_prev_ff;     // PS/2 clock input previous value
+    wire ps2_clk_re_stb;        // PS/2 clock input rising edge strobe
+    wire ps2_clk_fe_stb;        // PS/2 clock input falling edge strobe
+    
+    // capture PS/2 clock previous value
+    initial ps2_clkin_prev_ff = 1'b1;
+    always @(posedge clk_i)
+        ps2_clkin_prev_ff <= #1 ps2_clkin_sync_ff;
+    
+    // rising edge detector
+    assign ps2_clk_re_stb = (~ps2_clkin_prev_ff) & ps2_clkin_sync_ff;
+    
+    // falling edge detector
+    assign ps2_clk_fe_stb = ps2_clkin_prev_ff & (~ps2_clkin_sync_ff);
+    
+    
+/* PS/2 CLOCK OUTPUT **********************************************************/
+    
+    assign ps2_clk_io = (rx_full_ff) ? 1'b0 : 1'bZ;
+    
+    
+/* PS/2 TRANSMITTER ***********************************************************/
+    
+    wire tx_we;                 // TX write enable
+    wire tx_dout;               // TX 1-bit data output
+    wire tx_busy;               // TX busy flag
+    wire tx_err;                // TX error flag
+    
+    assign tx_we = 1'b0;        // disabled
+    
+    PS2_TX PS2_TX
         (
-        .clk_i       (clk_i),
-        .rst_i       (rst_i),
-        .ps2_clk_io  (ps2_clk_io),
-        .ps2_data_io (ps2_data_io),
-        .we_i        (1'b0),            // disable TX portion
-        .din_i       (8'h00),           // disable TX portion
-        .tx_busy_o   (tcvr_busy),
-        .tx_err_o    (tx_err),
-        .rx_stb_o    (rx_stb),
-        .rx_err_o    (rx_err),
-        .dout_o      (rx_data)
+        .clk_i           (clk_i),
+        .we_i            (tx_we),
+        .din_i           (din_i),
+        .ps2_clk_re_stb_i(ps2_clk_re_stb),
+        .ps2_clk_fe_stb_i(ps2_clk_fe_stb),
+        .ps2_din_i       (ps2_din_sync_ff),
+        .ps2_dout_o      (tx_dout),
+        .tx_busy_o       (tx_busy),
+        .tx_err_o        (tx_err)
+        );
+    
+    assign ps2_data_io = (tx_dout) ? 1'bZ : 1'b0;   // hi-Z or active low
+    
+    
+/* PS/2 RECEIVER **************************************************************/
+    
+    wire       rx_en;           // RX enable
+    wire       rx_stb;          // RX complete strobe
+    wire [7:0] rx_dout;         // RX 8-bit data output
+    wire       rx_parity_err;   // RX parity error flag
+    
+    // RX disabled if TX busy or RX buffer full
+    assign rx_en = ~(tx_busy | rx_full_ff);
+    
+    PS2_RX PS2_RX
+        (
+        .clk_i           (clk_i),
+        .en_i            (rx_en),
+        .ps2_clk_fe_stb_i(ps2_clk_fe_stb),
+        .ps2_din_i       (ps2_din_sync_ff),
+        .rx_stb_o        (rx_stb),
+        .dout_o          (rx_dout),
+        .parity_err_o    (rx_parity_err)
         );
     
     
-/* RECEIVE STATE MACHINE ******************************************************/
+/* PS2-TO-ASCII CONVERTER *****************************************************/
     
-    localparam S_IDLE     = 2'b00,      // idle state
-               S_MAKE     = 2'b01,      // make state
-               S_MODIFIER = 2'b10,      // alt, ctrl, shift keys
-               S_BREAK    = 2'b11;      // break key state
+    wire       scancode_valid;  // PS/2 scan code valid signal
+    wire       ascii_valid;     // ASCII code valid signal
+    wire [7:0] ascii;           // ASCII code
     
-    localparam C_EXTEND = 8'hE0,        // extended scan code
-               C_BREAK  = 8'hF0;        // break scan code
+    // ignore if parity error
+    assign scancode_valid = rx_stb & (~rx_parity_err);
     
-    // modifier keys
-    localparam C_ALT    = 8'h11,
-               C_CTRL   = 8'h14,
-               C_LSHIFT = 8'h12,
-               C_RSHIFT = 8'h59;
-    
-    reg [1:0] state_reg;
-    reg [1:0] state_ns;
-    
-    initial state_reg = S_IDLE;
-    always @(posedge clk_i) begin
-        if(rst_i)
-            state_reg <= #1 S_IDLE;
-        else
-            state_reg <= #1 state_ns;
-    end
-    
-    // next state logic
-    always @* begin
-        state_ns = state_reg;
-                
-        case(state_reg)
-            S_IDLE:     // wait for a key make or break
-                if(rx_stb)
-                    case(rx_data)
-                        C_ALT:    state_ns = S_MODIFIER;
-                        C_CTRL:   state_ns = S_MODIFIER;
-                        C_LSHIFT: state_ns = S_MODIFIER;
-                        C_RSHIFT: state_ns = S_MODIFIER;
-                        C_EXTEND: state_ns = S_IDLE;
-                        C_BREAK:  state_ns = S_BREAK;
-                        default:  state_ns = S_MAKE;
-                    endcase
-            
-            S_MAKE:         // key pressed
-                state_ns = S_IDLE;
-            
-            S_MODIFIER:     // alt, ctrl, or shift key pressed
-                state_ns = S_IDLE;
-            
-            S_BREAK:        // break code
-                if(rx_stb)
-                    state_ns = S_IDLE;
-            
-            default:
-                state_ns = S_IDLE;
-        
-        endcase        
-    end
+    PS2toASCII PS2toASCII
+        (
+        .clk_i     (clk_i),
+        .en_i      (scancode_valid),
+        .scancode_i(rx_dout),
+        .rdy_stb_o (ascii_valid),
+        .ascii_o   (ascii)
+        );
     
     
 /* RECEIVE REGISTER ***********************************************************/
     
-    wire       rxreg_en;        // receive register enable
-    reg  [7:0] rxreg_reg;       // received data register
+    reg [7:0] rx_data_reg;      // RX 8-bit data buffer register
     
-    // only save make codes from 0-127
-    assign rxreg_en = (state_reg == S_MAKE) & (~rx_data[7]);
-    
-    initial rxreg_reg = 8'h00;
+    initial rx_data_reg = 8'h00;
     always @(posedge clk_i)
-        if(rxreg_en)
-            rxreg_reg <= #1 rx_data;
+        if(ascii_valid)
+            rx_data_reg <= #1 ascii;
     
     
-/* MODIFIER KEY BITS **********************************************************/
+/* BUFFER FULL BIT ************************************************************/
     
-    wire modifier_make;     // modifier key make criteria
-    wire modifier_break;    // modifier key break criteria
+    wire data_rd;               // CPU reading DATA register
+    reg  rx_full_ff;            // RX full flag
     
-    // alt key signals
-    reg  alt_ff;
-    wire alt_dn;
-    wire alt_up;
-    
-    // ctrl key signals
-    reg  ctrl_ff;
-    wire ctrl_dn;
-    wire ctrl_up;
-    
-    // left shift key signals
-    reg  lshift_ff;
-    wire lshift_dn;
-    wire lshift_up;
-    
-    // right shift key signals
-    reg  rshift_ff;
-    wire rshift_dn;
-    wire rshift_up;
-    
-    assign modifier_make  = (state_reg == S_MODIFIER);
-    assign modifier_break = (state_reg == S_BREAK) & rx_stb;
-    
-    // alt, control, and shift key down and up signals
-    assign alt_dn    = modifier_make & (rx_data == C_ALT);
-    assign ctrl_dn   = modifier_make & (rx_data == C_CTRL);
-    assign lshift_dn = modifier_make & (rx_data == C_LSHIFT);
-    assign rshift_dn = modifier_make & (rx_data == C_RSHIFT);
-    
-    assign alt_up    = modifier_break & (rx_data == C_ALT);
-    assign ctrl_up   = modifier_break & (rx_data == C_CTRL);
-    assign lshift_up = modifier_break & (rx_data == C_LSHIFT);
-    assign rshift_up = modifier_break & (rx_data == C_RSHIFT);
-    
-    // alt key
-    initial alt_ff = 1'b0;
-    always @(posedge clk_i) begin
-        if(alt_dn)
-            alt_ff <= #1 1'b1;
-        else if(alt_up)
-            alt_ff <= #1 1'b0;
-    end
-    
-    // control key
-    initial ctrl_ff = 1'b0;
-    always @(posedge clk_i) begin
-        if(ctrl_dn)
-            ctrl_ff <= #1 1'b1;
-        else if(ctrl_up)
-            ctrl_ff <= #1 1'b0;
-    end
-    
-    // left shift key
-    initial lshift_ff = 1'b0;
-    always @(posedge clk_i) begin
-        if(lshift_dn)
-            lshift_ff <= #1 1'b1;
-        else if(lshift_up)
-            lshift_ff <= #1 1'b0;
-    end
-    
-    // right shift key
-    initial rshift_ff = 1'b0;
-    always @(posedge clk_i) begin
-        if(rshift_dn)
-            rshift_ff <= #1 1'b1;
-        else if(rshift_up)
-            rshift_ff <= #1 1'b0;
-    end
-    
-    
-/* FULL BIT *******************************************************************/
-    
-    wire full_rst;
-    wire full_set;
-    reg  full_ff;
-        
-    assign full_set = rxreg_en;                             // same criteria
-    assign full_rst = en_i & (~we_i) & (regsel_i == DATA);  // data read
+    // CPU reading DATA register read flag
+    assign data_rd = en_i & (~we_i) & (regsel_i == DATA);
     
     // set if receive buffer full, clear if receive buffer read
-    initial full_ff = 1'b0;
+    initial rx_full_ff = 1'b0;
     always @(posedge clk_i) begin
-        if(full_set)
-            full_ff <= #1 1'b1;
-        else if(full_rst)
-            full_ff <= #1 1'b0;
+        if(ascii_valid)
+            rx_full_ff <= #1 1'b1;
+        else
+            if(data_rd)
+                rx_full_ff <= #1 1'b0;
     end
     
 endmodule

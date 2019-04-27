@@ -34,16 +34,16 @@ module PS2_RX_tb;
 /* INPUTS *********************************************************************/
     
     reg clk_i;
-    reg rst_i;
-    reg ps2_clk_fe_i;
+    reg en_i;
+    reg ps2_clk_fe_stb_i;
     reg ps2_din_i;
     
     
 /* OUTPUTS ********************************************************************/
     
     wire       rx_stb_o;
-    wire       rx_err_o;
     wire [7:0] dout_o;
+    wire       parity_err_o;
     
     
 /* PS/2 DEVICE SIGNALS ********************************************************/
@@ -56,13 +56,13 @@ module PS2_RX_tb;
     
     PS2_RX PS2_RX_uut
         (
-        .clk_i       (clk_i),
-        .rst_i       (rst_i),
-        .ps2_clk_fe_i(ps2_clk_fe_i),
-        .ps2_din_i   (ps2_din_i),
-        .rx_stb_o    (rx_stb_o),
-        .rx_err_o    (rx_err_o),
-        .dout_o      (dout_o)
+        .clk_i           (clk_i),
+        .en_i            (en_i),
+        .ps2_clk_fe_stb_i(ps2_clk_fe_stb_i),
+        .ps2_din_i       (ps2_din_i),
+        .rx_stb_o        (rx_stb_o),
+        .dout_o          (dout_o),
+        .parity_err_o    (parity_err_o)
         );
     
     
@@ -88,10 +88,22 @@ module PS2_RX_tb;
     localparam KEY_Q = 8'h15;
     
     initial begin        
-        rst_i     = 1'b0;
+        en_i      = 1'b0;
         ps2_din_i = 1'b1;
-                
+        @(posedge clk_i);      
+        
         // simulate device-to-host communication
+        $write("Pressing U... ");
+        #1;
+        ps2_dev2host(KEY_U);
+        @(posedge clk_i);
+        
+        #100000;    // 100 us delay
+        
+        #1;
+        en_i = 1'b1;
+        @(posedge clk_i);
+        
         $write("Pressing U... ");
         #1;
         ps2_dev2host(KEY_U);
@@ -102,6 +114,10 @@ module PS2_RX_tb;
         $write("Pressing Q... ");
         #1;
         ps2_dev2host(KEY_Q);
+        @(posedge clk_i);
+        
+        #1;
+        en_i = 1'b0;
         @(posedge clk_i);
         
         // done
@@ -124,9 +140,9 @@ module PS2_RX_tb;
     always @(posedge clk_i)
         ps2_clk_prev <= #1 ps2_clk;
     
-    initial ps2_clk_fe_i = 1'b0;
+    initial ps2_clk_fe_stb_i = 1'b0;
     always @(posedge clk_i)
-        ps2_clk_fe_i <= #1 ps2_clk_prev & (~ps2_clk);
+        ps2_clk_fe_stb_i <= #1 ps2_clk_prev & (~ps2_clk);
     
     
 /* PS/2 KEYBOARD SIMULATOR ****************************************************/
@@ -134,7 +150,6 @@ module PS2_RX_tb;
     // PS/2 protocol bits
     localparam B_START = 1'b0;
     localparam B_STOP  = 1'b1;
-    
     
     // simulate device-to-host communication
     task ps2_dev2host;
@@ -145,7 +160,7 @@ module PS2_RX_tb;
         reg     [10:0] frame;
         
         begin            
-            parity = ~(^ din);
+            parity = ~(^ din);      // odd parity
             frame  = {B_STOP, parity, din, B_START};
             
             // 10 kHz PS/2 clock

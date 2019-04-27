@@ -78,29 +78,24 @@ BIOSTH  = $1E               ; call table (MSB) pointer
 BIOSTHL = $1E               ; call table (MSB) pointer LSB
 BIOSTHH = $1F               ; call table (MSB) pointer MSB
 
-;- keyboard map address --------------------------------------------------------
-KEYMAP  = $20               ; keymap pointer
-KEYMAPL = $20               ; keymap pointer LSB
-KEYMAPH = $21               ; keymap pointer MSB
-
 
 ;= ROM MONITOR =================================================================
 
 ;- ROM monitor -----------------------------------------------------------------
-MODE    = $22               ; store mode: 0 = addres, 1 = byte
-ADDR    = $23               ; address pointer
-ADDRL   = $23               ; address pointer LSB
-ADDRH   = $24               ; address pointer MSB
+MODE    = $20               ; store mode: 0 = addres, 1 = byte
+ADDR    = $21               ; address pointer
+ADDRL   = $21               ; address pointer LSB
+ADDRH   = $22               ; address pointer MSB
 
-XBLOCK  = $25               ; XMODEM block number
-XCHKSUM = $26               ; XMODEM checksum
-XDATA   = $27               ; XMODEM data pointer
-XDATAL  = $27               ; XMODEM data pointer LSB
-XDATAH  = $28               ; XMODEM data pointer MSB
-XERROR  = $29               ; XMODEM error
+XBLOCK  = $23               ; XMODEM block number
+XCHKSUM = $24               ; XMODEM checksum
+XDATA   = $25               ; XMODEM data pointer
+XDATAL  = $25               ; XMODEM data pointer LSB
+XDATAH  = $26               ; XMODEM data pointer MSB
+XERROR  = $27               ; XMODEM error
 
-BUF     = $30               ; buffer address
-CMDLN   = $30               ; command line address
+BUF     = $28               ; buffer address
+CMDLN   = $28               ; command line address
 
 
 ;===============================================================================
@@ -118,7 +113,7 @@ ENQ  = $05
 ACK  = $06
 BEL  = $07
 BS   = $08
-TAB  = $09
+HT   = $09
 LF   = $0A
 VT   = $0B
 FF   = $0C
@@ -235,13 +230,10 @@ VGA_EN      = %00000001                 ; EN bit of VGA STATUS register
 VGA_CURS    = %00000010                 ; CURS bit mask for VGA STATUS register
 
 ;- keyboard status register bits -----------------------------------------------
-KBD_FULL    = %00000001                 ; keyboard buffer full bit
+KBD_RXFULL  = %00000001                 ; keyboard RX buffer full bit
 KBD_RXERR   = %00000010                 ; receive error
 KBD_TXBUSY  = %00000100                 ; transmit busy status bit
 KBD_TXERR   = %00001000                 ; transmit error
-KBD_SHIFT   = %00010000                 ; shift key status bit
-KBD_CTRL    = %00100000                 ; control key status bit
-KBD_ALT     = %01000000                 ; alt key status bit
 
 ;- UART status register bits ---------------------------------------------------
 UART_TXBUSY = %00000001                 ; UART transmit busy

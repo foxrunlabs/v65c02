@@ -38,7 +38,7 @@
 
 ;= CONSTANTS ===================================================================
 
-.DEFINE     VERSION .CONCAT("v65C02 BIOS v", "2.0.0")
+.DEFINE     VERSION .CONCAT("v65C02 BIOS v", "1.0.0")
 
             ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
 
@@ -103,12 +103,6 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     #.HIBYTE(bios_tbl_h)
             sta     BIOSTHH
             
-            ;- keyboard map address --------------------------------------------
-            lda     #.LOBYTE(keymap)
-            sta     KEYMAPL
-            lda     #.HIBYTE(keymap)
-            sta     KEYMAPH
-            
             ;- clear keyboard buffer -------------------------------------------
             lda     KBD_DATA
             
@@ -170,14 +164,14 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
 .proc putch
             
             cmp     #LF
-            beq     @lf                 ; linefeed? process
-            cmp     #TAB
-            beq     @tab                ; TAB? process
+            beq     @lf                 ; line feed? process
+            cmp     #HT
+            beq     @ht                 ; horizontal tab? process
             cmp     #BS
             beq     @bs                 ; backspace? process
             bra     @print              ; print character
             
-            ;- process linefeed ------------------------------------------------
+            ;- process LF ------------------------------------------------------
 @lf:        ldx     #0                  ; column = 0
             lda     ROW                 ; A = row
             inc     A                   ; row++
@@ -188,8 +182,8 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     #24                 ; row = 24
             bra     @setcurs
                         
-            ;- process TAB -----------------------------------------------------
-@tab:       lda     COL                 ; A = column
+            ;- process HT ----------_-------------------------------------------
+@ht:        lda     COL                 ; A = column
             cmp     #72
             bcs     @lf                 ; column >= 72? new line
             
@@ -199,7 +193,7 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     ROW
             bra     @setcurs
             
-            ;- process backspace -----------------------------------------------
+            ;- process BS --------------_---------------------------------------
 @bs:        lda     ROW                 ; A = row
             ldx     COL                 ; X = column
             dex                         ; column--
@@ -230,7 +224,7 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             
             ldx     COL                 ; X = current column
             cpx     #79
-            beq     @lf                 ; column == 79? newline
+            beq     @lf                 ; column == 79? new line
 
             inx                         ; column++
             lda     ROW                 ; A = current row
@@ -386,24 +380,15 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
 ; Wait for keystroke and read.
 ;
 ; Parameters: none
-; Returns:    X = scan code
-;             A = ASCII or zero
+; Returns:    A = ASCII code
 
 .proc getkey
             
             lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #KBD_FULL           ; test FULL bit
+            bit     #KBD_RXFULL         ; test RXFULL bit
             beq     getkey              ; FULL == 0? keep polling
             
-            lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            and     #KBD_SHIFT          ; isolate shift bit
-            asl     A
-            asl     A
-            asl     A                   ; STATUS << 3
-            ora     KBD_DATA            ; scan code | (STATUS << 3)
-            tax
-            lda     keymap, X           ; A = ASCII
-            ldx     KBD_DATA            ; X = scan code
+            lda     KBD_DATA            ; read DATA register
             
             rts
 
@@ -437,7 +422,7 @@ irq:        pha                         ; save A
             tsx                         ; stack pointer -> X
             lda     $0103, X            ; extract status flags
             bit     #%00010000          ; B flag set?
-            beq     @exit               ; nope, must be an IRQ
+            beq     @irq                ; nope, must be an IRQ
             
             lda     $0105, X            ; stack: program counter high byte
             sta     R1
@@ -461,7 +446,8 @@ irq:        pha                         ; save A
             
 @halt:      bra     @halt               ; loop forever
             
-@exit:      plx
+            ;- IRQ handler -----------------------------------------------------
+@irq:       plx
             pla
             
             rti
@@ -512,41 +498,5 @@ biosver:    .BYTE VERSION, LF, NUL
 copyright:  .BYTE "Copyright (C) 2018 Ryan Clarke", LF, NUL
 nodisk:     .BYTE "SD card not found.", LF, NUL
 loading:    .BYTE "Loading ROM monitor.", LF, NUL
-
-
-;= KEYBOARD MAP ================================================================
-
-keymap:     .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; 00-07
-            .BYTE $00, $00, $00, $00, $00, $09, $60, $00    ; 08-0F
-            .BYTE $00, $00, $00, $00, $00, $71, $31, $00    ; 10-17
-            .BYTE $00, $00, $7A, $73, $61, $77, $32, $00    ; 18-1F
-            .BYTE $00, $63, $78, $64, $65, $34, $33, $00    ; 20-27
-            .BYTE $00, $20, $76, $66, $74, $72, $35, $00    ; 28-2F
-            .BYTE $00, $6E, $62, $68, $67, $79, $36, $00    ; 30-37
-            .BYTE $00, $00, $6D, $6A, $75, $37, $38, $00    ; 38-3F
-            .BYTE $00, $2C, $6B, $69, $6F, $30, $39, $00    ; 40-47
-            .BYTE $00, $2E, $2F, $6C, $3B, $70, $2D, $00    ; 48-4F
-            .BYTE $00, $00, $27, $00, $5B, $3D, $00, $00    ; 50-57
-            .BYTE $00, $00, $0A, $5D, $00, $5C, $00, $00    ; 58-5F
-            .BYTE $00, $00, $00, $00, $00, $00, $08, $00    ; 60-67
-            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; 68-6F
-            .BYTE $00, $00, $00, $00, $00, $00, $1B, $00    ; 70-77
-            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; 78-7F
-            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; 80-87
-            .BYTE $00, $00, $00, $00, $00, $09, $7E, $00    ; 88-8F
-            .BYTE $00, $00, $00, $00, $00, $51, $21, $00    ; 90-97
-            .BYTE $00, $00, $5A, $53, $41, $57, $40, $00    ; 98-9F
-            .BYTE $00, $43, $58, $44, $45, $24, $23, $00    ; A0-A7
-            .BYTE $00, $20, $56, $46, $54, $52, $25, $00    ; A8-AF
-            .BYTE $00, $4E, $42, $48, $47, $59, $5E, $00    ; B0-B7
-            .BYTE $00, $00, $4D, $4A, $55, $26, $2A, $00    ; B8-BF
-            .BYTE $00, $3C, $4B, $49, $4F, $29, $28, $00    ; C0-C7
-            .BYTE $00, $3E, $3F, $4C, $3A, $50, $5F, $00    ; C8-CF
-            .BYTE $00, $00, $22, $00, $7B, $2B, $00, $00    ; D0-D7
-            .BYTE $00, $00, $0A, $7D, $00, $7C, $00, $00    ; D8-DF
-            .BYTE $00, $00, $00, $00, $00, $00, $08, $00    ; E0-E7
-            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; E8-EF
-            .BYTE $00, $00, $00, $00, $00, $00, $1B, $00    ; F0-F7
-            .BYTE $00, $00, $00, $00, $00, $00, $00, $00    ; F8-FF
 
 .END

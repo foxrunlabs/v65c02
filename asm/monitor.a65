@@ -80,21 +80,20 @@ getcmdln:   lda     #'-'
             ldx     #0                  ; X = string index
             
             ;- get keystroke ---------------------------------------------------
-@getkey:    phx
-            bios    #5                  ; wait for keystroke and read
-            plx
+@getkey:    bios    #5                  ; wait for keystroke and read
             
             ;- evaluate keystroke ----------------------------------------------
-            cmp     #NUL
-            beq     @getkey             ; NUL? ignore
             cmp     #ESC
             beq     @esc                ; escape key? process
             cmp     #BS
             beq     @bs                 ; backspace key? process
             cmp     #LF
-            beq     @lf                 ; line feed? process
-            cmp     #TAB
-            beq     @getkey             ; tab? ignore
+            beq     @lf                 ; enter key? process
+            
+            cmp     #' '
+            bcc     @getkey             ; byte < ' '? ignore
+            cmp     #DEL
+            bcs     @getkey             ; byte >= DEL? ignore
             
             cpx     #CMDMAX
             beq     @getkey             ; ignore if input > command line maximum
@@ -663,11 +662,11 @@ xmodem:     lda     #1                      ; first block = 1
 
 invalidmsg: .BYTE "invalid", LF, NUL
 
-helpmsg:    .BYTE "dump", TAB, "address", LF
-            .BYTE "enter", TAB, "address list", LF
-            .BYTE "go", TAB, "g", LF
-            .BYTE "help", TAB, "?", LF
-            .BYTE "xmodem", TAB, "x", LF, NUL
+helpmsg:    .BYTE "dump", HT, "address", LF
+            .BYTE "enter", HT, "address list", LF
+            .BYTE "go", HT, "g", LF
+            .BYTE "help", HT, "?", LF
+            .BYTE "xmodem", HT, "x", LF, NUL
 
 wrotemsg:   .BYTE "received ", NUL
 timeoutmsg: .BYTE "timeout", LF, NUL

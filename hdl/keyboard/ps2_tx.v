@@ -29,36 +29,30 @@ Purpose : PS/2 transmitter module for the v65C02 8-bit Computer.
 
 module PS2_TX
     (
-    input  wire       clk_i,        // system clock
-    input  wire       rst_i,        // reset
+    input  wire       clk_i,            // system clock
     
-    input  wire       ps2_clk_fe_i, // PS/2 clock falling edge
-    input  wire       ps2_din_i,    // PS/2 serial data input
-    output wire       ps2_dout_o,   // PS/2 serial data output
+    input  wire       we_i,             // write enable
+    input  wire [7:0] din_i,            // 8-bit data input
     
-    input  wire       we_i,         // write enable
-    input  wire [7:0] din_i,        // 8-bit data input
+    input  wire       ps2_clk_re_stb_i, // PS/2 clock rising edge strobe
+    input  wire       ps2_clk_fe_stb_i, // PS/2 clock falling edge strobe
+    input  wire       ps2_din_i,        // PS/2 serial data input
+    output wire       ps2_dout_o,       // PS/2 serial data output
     
-    output wire       tx_busy_o,    // data received strobe
-    output wire       tx_err_o      // receive error strobe
+    output wire       tx_busy_o,        // data received strobe
+    output wire       tx_err_o          // receive error strobe
     );
     
     
 /* BIT COUNTER ****************************************************************/
     
-    wire      bit_count_en;
-    reg [3:0] bit_count_reg;
+    reg [3:0] bit_count_reg;            // bit counter register
+    reg [3:0] bit_count_ns;
     
-    assign bit_count_en = ps2_clk_fe_i & (bit_count_reg < 4'd11);
-    
-    initial bit_count_reg = 4'd11;
+    // bit counter
+    initial bit_count_reg = 4'd0;
     always @(posedge clk_i)
-        if(we_i)
-            bit_count_reg <= #1 4'd0;
-        else if(bit_count_en)
-            bit_count_reg <= #1 bit_count_reg + 1'd1;
-    
-    assign tx_busy_o = bit_count_reg < 4'd11;
+        bit_count_reg <= #1 bit_count_ns;
     
     
 /* SHIFT REGISTER *************************************************************/
@@ -67,36 +61,92 @@ module PS2_TX
     localparam B_START = 1'b0,
                B_STOP  = 1'b1;
     
-    wire        parity;                 // odd parity
-    reg  [10:0] frame_reg;              // 11-bit PS/2 frame register
-    wire        tx_done;                // transmit complete signal
+    reg  [10:0] frame_reg;              // 11-bit PS/2 protocol frame register
+    reg  [10:0] frame_ns;
+    wire        parity;                 // transmit data parity
     
     assign parity = ~(^ din_i);         // compute odd parity
     
+    // PS/2 frame
     initial frame_reg = {11{1'b1}};
-    always @(posedge clk_i) begin
-        if(rst_i)
-            frame_reg <= #1 {11{1'b1}};
-        else begin
-            if(we_i)
-                frame_reg <= #1 {B_STOP, parity, din_i, B_START};
-            else if(bit_count_en)
-                frame_reg <= #1 {1'b1, frame_reg[10:1]};
-        end
-    end
+    always @(posedge clk_i)
+        frame_reg <= #1 frame_ns;
     
     // output logic
     assign ps2_dout_o = frame_reg[0];
     
     
+/* STATE MACHINE **************************************************************/
+    
+    localparam S_IDLE = 2'd0,           // idle
+               S_TX   = 2'd1,           // transmit
+               S_ACK  = 2'd2,           // acknowledge
+               S_DONE = 2'd3;           // done
+    
+    reg [1:0] state_reg;                // state register
+    reg [1:0] state_ns;
+    
+    // state
+    initial state_reg = S_IDLE;
+    always @(posedge clk_i)
+        state_reg <= #1 state_ns;
+    
+    // next state logic
+    always @* begin
+        state_ns     = state_reg;
+        frame_ns     = frame_reg;
+        bit_count_ns = bit_count_reg;
+        
+        case(state_reg)
+            S_IDLE:
+                if(we_i) begin
+                    bit_count_ns = 4'd0;
+                    frame_ns     = {B_STOP, parity, din_i, B_START};
+                    
+                    state_ns = S_TX;
+                end
+            
+            S_TX: begin
+                // first bit is transmitted immediately, so cycle through 10
+                if(bit_count_reg < 4'd10) begin
+                    if(ps2_clk_fe_stb_i) begin
+                        bit_count_ns = bit_count_reg + 4'd1;
+                        frame_ns     = {1'b1, frame_reg[10:1]};
+                    end
+                end
+                else begin
+                    state_ns = S_ACK;
+                end
+            end
+            
+            S_ACK:
+                if(ps2_clk_fe_stb_i)
+                    state_ns = S_DONE;
+            
+            S_DONE:
+                if(ps2_clk_re_stb_i)    // wait until clock resets to idle
+                    state_ns = S_IDLE;
+            
+            default:
+                state_ns = S_IDLE;
+            
+        endcase
+    
+    end
+    
+    // output logic
+    assign tx_busy_o = (state_reg != S_IDLE);   
+    
+    
 /* ACK BIT ********************************************************************/
     
-    reg error_ff;
+    reg error_ff;                       // transmit error, set if NACK
     
     initial error_ff = 1'b0;
     always @(posedge clk_i)
-        if(ps2_clk_fe_i & (bit_count_reg == 4'd10))
-            error_ff <= #1 ps2_din_i;
+        if(state_reg == S_ACK)
+            if(ps2_clk_fe_stb_i)
+                error_ff <= #1 ps2_din_i;   // high = NACK, low = ACK
     
     // output logic
     assign tx_err_o = error_ff;
