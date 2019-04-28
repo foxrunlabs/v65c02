@@ -52,6 +52,4 @@ A "Hello, World!" program has been included, with supporting library, to test th
 ### Legal:
 The original verilog-6502 soft core is copyright (C) Arlet Ottens, and the 65C02 extensions are copyright (C) 2016 David Banks and Ed Spittles.
 
-The assembly sources and remaining Verilog sources are copyright (C) 2018 Ryan Clarke under the GNU General Public License Version 3.
-
-Character ROM data is derived from the *IBM VGA8* font contained in [The Ultimate Oldschool PC Font Pack](http://int10h.org/oldschool-pc-fonts/) and is copyright (C) 2016 VileR under the Creative Commons Attribution-ShareAlike 4.0 International License.
+The assembly sources and remaining Verilog sources are copyright (C) 2018 Ryan Clarke.
