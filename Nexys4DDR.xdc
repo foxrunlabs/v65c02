@@ -9,7 +9,7 @@ create_clock -add -name sys_clk_pin -period 10.00 -waveform {0 5} [get_ports {CL
 
 
 ## Asynchronous Clock Groups
-set_clock_groups -asynchronous -group [list [get_clocks -of_objects [get_pins ClockGen/inst/mmcm_adv_inst/CLKOUT0]]] -group [list [get_clocks -of_objects [get_pins ClockGen/inst/mmcm_adv_inst/CLKOUT1]]]
+set_clock_groups -asynchronous -group [list [get_clocks -of_objects [get_pins Clock/mmcme2_base/CLKOUT0]]] -group [list [get_clocks -of_objects [get_pins Clock/mmcme2_base/CLKOUT1]]]
 
 
 ##Switches

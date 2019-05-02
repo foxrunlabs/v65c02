@@ -62,14 +62,14 @@ module v65C02_Top
     
 /* CLOCK GENERATOR ************************************************************/
     
-    wire clk_pixel;                     // pixel clock
-    wire clk_cpu;                       // CPU clock
+    wire clk_cpu;                       // 50 MHz CPU clock
+    wire clk_pixel;                     // 28.322 MHz VGA pixel clock
     
-    ClockGen ClockGen
+    Clock Clock
         (
         .clk_100M_i   (CLK100MHZ),
-        .clk_28_322M_o(clk_pixel),      // VGA pixel clock 28.322MHz
-        .clk_50M_o    (clk_cpu)         // CPU clock 50MHz
+        .clk_50M_o    (clk_cpu),
+        .clk_28_322M_o(clk_pixel)
         );
     
     
