@@ -229,10 +229,7 @@ VGA_EN      = %00000001                 ; EN bit of VGA STATUS register
 VGA_CURS    = %00000010                 ; CURS bit mask for VGA STATUS register
 
 ;- keyboard status register bits -----------------------------------------------
-KBD_RXFULL  = %00000001                 ; keyboard RX buffer full bit
-KBD_RXERR   = %00000010                 ; receive error
-KBD_TXBUSY  = %00000100                 ; transmit busy status bit
-KBD_TXERR   = %00001000                 ; transmit error
+KBD_DATAFULL = %00000001                ; keyboard data register full
 
 ;- UART status register bits ---------------------------------------------------
 UART_TXBUSY = %00000001                 ; UART transmit busy

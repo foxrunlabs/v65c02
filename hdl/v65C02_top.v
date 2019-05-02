@@ -257,9 +257,7 @@ module v65C02_Top
         (
         .clk_i      (clk_cpu),
         .en_i       (kbd_en),
-        .we_i       (cpu_we),
         .regsel_i   (cpu_addr[0]),
-        .din_i      (cpu_dout),
         .dout_o     (kbd_dout),
         .ps2_clk_io (PS2_CLK),
         .ps2_data_io(PS2_DATA)

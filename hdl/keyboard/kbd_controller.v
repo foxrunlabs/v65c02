@@ -35,10 +35,8 @@ module KeyboardController
     input  wire       clk_i,        // CPU clock
     
     input  wire       en_i,         // controller bus select
-    input  wire       we_i,         // write enable
     
     input  wire       regsel_i,     // 1-bit register select
-    input  wire [7:0] din_i,        // 8-bit register data input
     output wire [7:0] dout_o,       // 8-bit register data output
     
     inout  wire       ps2_clk_io,   // PS/2 clock
@@ -51,38 +49,47 @@ module KeyboardController
     localparam STATUS = 1'b0,
                DATA   = 1'b1;
     
-    wire [7:0] status;              // STATUS register bits
     reg  [7:0] dout_reg;            // register output
-    
-    assign status = {4'b0000, tx_err, tx_busy, rx_parity_err, rx_full_ff};
     
     // read logic
     initial dout_reg = 8'h00;
     always @(posedge clk_i)
         if(en_i)
-            if(~we_i)
-                case(regsel_i)
-                    STATUS:  dout_reg <= #1 status;
-                    DATA:    dout_reg <= #1 rx_data_reg;
-                    default: dout_reg <= #1 8'h00;
-                endcase
+            case(regsel_i)
+                STATUS:  dout_reg <= #1 {7'b0000_000, data_full_ff};
+                DATA:    dout_reg <= #1 data_reg;
+                default: dout_reg <= #1 8'h00;
+            endcase
     
     // output logic
     assign dout_o = dout_reg;
     
     
-/* PS/2 CLOCK INPUT SYNCHRONIZER **********************************************/
+/* PS/2 CLOCK AND DATA OUTPUT *************************************************/
     
-    reg ps2_clkin_async_ff;     // PS/2 clock input synchronizer
-    reg ps2_clkin_sync_ff;      // PS/2 clock input synchronizer
+    assign ps2_clk_io  = (data_full_ff) ? 1'b0 : 1'bZ;  // suppress if DATA full
+    assign ps2_data_io = 1'bZ;                          // always receiving
+    
+    
+/* PS/2 CLOCK INPUT SYNCHRONIZER AND FALLING EDGE DETECTOR ********************/
+    
+    reg  ps2_clkin_async_ff;        // PS/2 clock input synchronizer
+    reg  ps2_clkin_sync_ff;         // PS/2 clock input synchronizer
+    reg  ps2_clkin_sync_prev_ff;    // PS/2 clock previous input
+    wire ps2_clkin_fe_stb;          // PS/2 clock input falling edge strobe
     
     // PS/2 clock input synchronizer
-    initial ps2_clkin_async_ff = 1'b1;
-    initial ps2_clkin_sync_ff  = 1'b1;
+    initial ps2_clkin_async_ff     = 1'b1;
+    initial ps2_clkin_sync_ff      = 1'b1;
+    initial ps2_clkin_sync_prev_ff = 1'b1;
     always @(posedge clk_i) begin
-        ps2_clkin_async_ff <= #1 ps2_clk_io;
-        ps2_clkin_sync_ff  <= #1 ps2_clkin_async_ff;
+        ps2_clkin_async_ff     <= #1 ps2_clk_io;
+        ps2_clkin_sync_ff      <= #1 ps2_clkin_async_ff;
+        ps2_clkin_sync_prev_ff <= #1 ps2_clkin_sync_ff;
     end
+    
+    // falling edge detector
+    assign ps2_clkin_fe_stb = ps2_clkin_sync_prev_ff & (~ps2_clkin_sync_ff);
     
     
 /* PS/2 DATA INPUT SYNCHRONIZER ***********************************************/
@@ -99,69 +106,21 @@ module KeyboardController
     end
     
     
-/* PS/2 CLOCK INPUT EDGE DETECTORS ********************************************/
-    
-    reg  ps2_clkin_prev_ff;     // PS/2 clock input previous value
-    wire ps2_clk_re_stb;        // PS/2 clock input rising edge strobe
-    wire ps2_clk_fe_stb;        // PS/2 clock input falling edge strobe
-    
-    // capture PS/2 clock previous value
-    initial ps2_clkin_prev_ff = 1'b1;
-    always @(posedge clk_i)
-        ps2_clkin_prev_ff <= #1 ps2_clkin_sync_ff;
-    
-    // rising edge detector
-    assign ps2_clk_re_stb = (~ps2_clkin_prev_ff) & ps2_clkin_sync_ff;
-    
-    // falling edge detector
-    assign ps2_clk_fe_stb = ps2_clkin_prev_ff & (~ps2_clkin_sync_ff);
-    
-    
-/* PS/2 CLOCK OUTPUT **********************************************************/
-    
-    assign ps2_clk_io = (rx_full_ff) ? 1'b0 : 1'bZ;
-    
-    
-/* PS/2 TRANSMITTER ***********************************************************/
-    
-    wire tx_we;                 // TX write enable
-    wire tx_dout;               // TX 1-bit data output
-    wire tx_busy;               // TX busy flag
-    wire tx_err;                // TX error flag
-    
-    assign tx_we = 1'b0;        // disabled
-    
-    PS2_TX PS2_TX
-        (
-        .clk_i           (clk_i),
-        .we_i            (tx_we),
-        .din_i           (din_i),
-        .ps2_clk_re_stb_i(ps2_clk_re_stb),
-        .ps2_clk_fe_stb_i(ps2_clk_fe_stb),
-        .ps2_din_i       (ps2_din_sync_ff),
-        .ps2_dout_o      (tx_dout),
-        .tx_busy_o       (tx_busy),
-        .tx_err_o        (tx_err)
-        );
-    
-    assign ps2_data_io = (tx_dout) ? 1'bZ : 1'b0;   // hi-Z or active low
-    
-    
 /* PS/2 RECEIVER **************************************************************/
     
-    wire       rx_en;           // RX enable
-    wire       rx_stb;          // RX complete strobe
-    wire [7:0] rx_dout;         // RX 8-bit data output
-    wire       rx_parity_err;   // RX parity error flag
+    wire       rx_en;           // PS/2 RX enable
+    wire       rx_stb;          // PS/2 RX complete strobe
+    wire [7:0] rx_dout;         // PS/2 RX 8-bit data output
+    wire       rx_parity_err;   // PS/2 RX parity error flag
     
     // RX disabled if TX busy or RX buffer full
-    assign rx_en = ~(tx_busy | rx_full_ff);
+    assign rx_en = ~data_full_ff;
     
     PS2_RX PS2_RX
         (
         .clk_i           (clk_i),
         .en_i            (rx_en),
-        .ps2_clk_fe_stb_i(ps2_clk_fe_stb),
+        .ps2_clk_fe_stb_i(ps2_clkin_fe_stb),
         .ps2_din_i       (ps2_din_sync_ff),
         .rx_stb_o        (rx_stb),
         .dout_o          (rx_dout),
@@ -190,30 +149,29 @@ module KeyboardController
     
 /* RECEIVE REGISTER ***********************************************************/
     
-    reg [7:0] rx_data_reg;      // RX 8-bit data buffer register
+    reg [7:0] data_reg;         // 8-bit data register
     
-    initial rx_data_reg = 8'h00;
+    initial data_reg = 8'h00;
     always @(posedge clk_i)
         if(ascii_valid)
-            rx_data_reg <= #1 ascii;
+            data_reg <= #1 ascii;
     
     
 /* BUFFER FULL BIT ************************************************************/
     
     wire data_rd;               // CPU reading DATA register
-    reg  rx_full_ff;            // RX full flag
+    reg  data_full_ff;          // DATAFULL bit of STATUS register
     
-    // CPU reading DATA register read flag
-    assign data_rd = en_i & (~we_i) & (regsel_i == DATA);
+    assign data_rd = en_i & (regsel_i == DATA);
     
-    // set if receive buffer full, clear if receive buffer read
-    initial rx_full_ff = 1'b0;
+    // set if data register full, clear if data register read by CPU
+    initial data_full_ff = 1'b0;
     always @(posedge clk_i) begin
         if(ascii_valid)
-            rx_full_ff <= #1 1'b1;
+            data_full_ff <= #1 1'b1;
         else
             if(data_rd)
-                rx_full_ff <= #1 1'b0;
+                data_full_ff <= #1 1'b0;
     end
     
 endmodule

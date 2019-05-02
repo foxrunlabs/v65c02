@@ -384,7 +384,7 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
 .proc getkey
             
             lda     KBD_STATUS          ; retrieve keyboard STATUS register
-            bit     #KBD_RXFULL         ; test RXFULL bit
+            bit     #KBD_DATAFULL       ; test DATAFULL bit
             beq     getkey              ; FULL == 0? keep polling
             
             lda     KBD_DATA            ; read DATA register
