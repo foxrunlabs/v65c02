@@ -47,7 +47,7 @@ module ROM_4K8
     (* rom_style = "block" *) reg [7:0] rom_reg [0:4095];
     
     // Initialize the ROM with IBM Code Page 437
-    initial $readmemb("ibm_cp437.txt", rom_reg, 0, 4095);
+    initial $readmemb("../../bram_data/ibm_cp437.bin", rom_reg, 0, 4095);
     
     initial dout_o = 8'h00;
     always @(posedge clk_i)
