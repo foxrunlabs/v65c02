@@ -21,19 +21,20 @@
 # Author    : Ryan Clarke
 # E-mail    : kj6msg@icloud.com
 ################################################################################
-# Purpose : Update the BIOS on the v65C02 8-bit Computer
+# Purpose : Update the BIOS in the v65C02 8-bit Computer .BIT file
 ################################################################################
 
 
-proc update_bios { { bios_name bios } } {
-    set bram_data_dir bram_data    
-    append mmi_file $bram_data_dir {/} $bios_name {.mmi}
-    append mem_file $bram_data_dir {/} $bios_name {.mem}
+proc update_bios {} {
+    # MMI and MEM files
+    append mmi_file "bram_data/bios.mmi"
+    append mem_file "bram_data/bios.mem"
     
-    append bit_dir [get_property NAME [current_project]] {.runs} {/} [current_run]
-    set top_module [get_property TOP [current_fileset]]
-    append in_file $bit_dir {/} $top_module {.bit}
-    append out_file $bit_dir {/} $top_module {_updated.bit}
-
-    puts [exec updatemem --force --proc dummy --meminfo $mmi_file --data $mem_file --bit $in_file --out $out_file]
+    # set the location of the BIT file
+    append bit_dir [current_project] ".runs/" [current_run]
+    append bit_file $bit_dir "/v65C02_Top.bit"
+    
+    # update the BIT file with the new BIOS
+    exec updatemem --force --proc dummy --meminfo $mmi_file --data $mem_file \
+                   --bit $bit_file --out $bit_file
     }

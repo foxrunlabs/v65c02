@@ -17,13 +17,14 @@
 #===============================================================================
 
 #===============================================================================
-# Program   : bin2coe
-# File Name : bin2coe.sh
+# Program   : bin2hex
+# File Name : bin2hex.sh
 # Project   : v65C02 8-bit Computer
 # Author    : Ryan Clarke
 # E-mail    : kj6msg@icloud.com
 #===============================================================================
-# Purpose : Converts a binary file to COE format for Xilinx FPGA tools.
+# Purpose : Converts a binary file to hexadecimal text format for Xilinx FPGA
+#           tools.
 #===============================================================================
 
 
@@ -45,12 +46,9 @@ if [ ! -s $1 ] ; then
     exit 1
 fi
 
-# COE filename is input filename, stripped of extension, with .coe appended
-COEFILE=${1%.*}'.coe'
+# HEXFILE filename is input filename, stripped of extension, with .hex appended
+HEXFILE=${1%.*}'.hex'
 
-echo "; bin2coe conversion of $1" > $COEFILE
-echo "memory_initialization_radix=16;" >> $COEFILE
-echo "memory_initialization_vector=" >> $COEFILE
-xxd -p -c 1 $1 - | sed 's/$/,/' | sed '$s/,/;/' >> $COEFILE
+xxd -p -c 1 $1 - >> $HEXFILE
 
 exit 0

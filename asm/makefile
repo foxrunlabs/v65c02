@@ -31,8 +31,8 @@ exec_prefix = $(prefix)
 bin_dir     = $(exec_prefix)/bram_data
 
 BIOS     = bios.rom
-BIOS_COE = bios.coe
 BIOS_MEM = bios.mem
+BIOS_HEX = bios.hex
 OBJECTS  = bios.o monitor.o
 
 AS       = ca65
@@ -42,8 +42,8 @@ LD       = ld65
 LDCONFIG = memory.conf
 LDFLAGS  = -C $(LDCONFIG) -m $(basename $@).map -o $(BIOS)
 
-BIN2COE  = ./bin2coe.sh
 BIN2MEM  = ./bin2mem.sh
+BIN2HEX  = ./bin2hex.sh
 
 .PHONY: all install clean
 
@@ -57,17 +57,17 @@ monitor.o : monitor.a65 include/v65C02.inc
 
 $(BIOS) : $(OBJECTS)
 	$(LD) $(LDFLAGS) $^
-	$(BIN2COE) $@
 	$(BIN2MEM) $@
+	$(BIN2HEX) $@
 
 install :
-	@cp -v $(BIOS_COE) $(bin_dir)
 	@cp -v $(BIOS_MEM) $(bin_dir)
+	@cp -v $(BIOS_HEX) $(bin_dir)
 
 clean :
 	@rm -fv *.lst
 	@rm -fv *.map
 	@rm -fv *.o
 	@rm -fv $(BIOS)
-	@rm -fv $(BIOS_COE)
 	@rm -fv $(BIOS_MEM)
+	@rm -fv $(BIOS_HEX)
