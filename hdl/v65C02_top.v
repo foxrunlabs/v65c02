@@ -113,7 +113,13 @@ module v65C02_Top
     
     assign bios_en = (& cpu_addr[15:14]);   // BIOS = $C000 -> $FFFF
     
-    ROM_16K8 BIOS
+    ROM_BRAM
+        #(
+        .WIDTH    (8),
+        .DEPTH    (16384),
+        .INIT_FILE("../../bram_data/bios.hex")
+        )
+        BIOS
         (
         .clk_i (clk_cpu),
         .en_i  (bios_en),

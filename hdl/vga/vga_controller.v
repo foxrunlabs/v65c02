@@ -227,7 +227,13 @@ module VGAController
         .pixel_o    (chargen_pixel)
         );
     
-    ROM_4K8 CharacterROM
+    ROM_BRAM
+        #(
+        .WIDTH    (8),
+        .DEPTH    (4096),
+        .INIT_FILE("../../bram_data/font.hex")
+        )
+        CharacterROM
         (
         .clk_i (clk_pixel_i),
         .en_i  (char2rom_rd_stb),
