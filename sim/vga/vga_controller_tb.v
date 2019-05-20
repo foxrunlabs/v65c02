@@ -113,12 +113,25 @@ module VGAController_tb;
         regsel_i    =  2'b00;
         reg_din_i   =  8'h00;
         
-        // set screen attribute
+        // write SPACE character to VRAM address 0x000
+        #1;
+        vram_en_i   =  1'b1;
+        vram_we_i   =  1'b1;
+        vram_addr_i = 12'h000;
+        vram_din_i  =  8'h20;
+        @(posedge clk_cpu_i);
+        
+        #1;
+        vram_en_i = 1'b0;
+        vram_we_i = 1'b0;
+        @(posedge clk_cpu_i);
+        
+        // select attribute page
         #1;
         reg_en_i  = 1'b1;
         reg_we_i  = 1'b1;
-        regsel_i  = 2'b11;
-        reg_din_i = 8'h07;
+        regsel_i  = 2'b00;
+        reg_din_i = 8'b0000_0100;
         @(posedge clk_cpu_i);
         
         #1;
@@ -126,12 +139,12 @@ module VGAController_tb;
         reg_we_i = 1'b0;
         @(posedge clk_cpu_i);
         
-        // write SPACE character to VRAM address 0x000
+        // write attribute to VRAM address 0x000;
         #1;
         vram_en_i   =  1'b1;
         vram_we_i   =  1'b1;
         vram_addr_i = 12'h000;
-        vram_din_i  =  8'h20;
+        vram_din_i  =  8'h17;
         @(posedge clk_cpu_i);
         
         #1;
@@ -154,12 +167,35 @@ module VGAController_tb;
 //         reg_din_i = 8'h00;
 //         @(posedge clk_cpu_i);
         
-        // enable VGA output and cursor
+        // enable VGA output and cursor, select display page
         #1;
         reg_en_i  = 1'b1;
         reg_we_i  = 1'b1;
         regsel_i  = 2'b00;
-        reg_din_i = 8'h03;
+        reg_din_i = 8'b0000_0011;
+        @(posedge clk_cpu_i);
+        
+        #1;
+        reg_en_i = 1'b0;
+        reg_we_i = 1'b0;
+        @(posedge clk_cpu_i);
+        
+        // read video RAM address 0x000
+        #1;
+        vram_en_i   =  1'b1;
+        vram_addr_i = 12'h000;
+        @(posedge clk_cpu_i);
+        
+        #1;
+        vram_en_i = 1'b0;
+        @(posedge clk_cpu_i);
+        
+        // select attribute page
+        #1;
+        reg_en_i  = 1'b1;
+        reg_we_i  = 1'b1;
+        regsel_i  = 2'b00;
+        reg_din_i = 8'b0000_0111;
         @(posedge clk_cpu_i);
         
         #1;

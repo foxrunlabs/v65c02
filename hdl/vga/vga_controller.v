@@ -111,30 +111,26 @@ module VGAController
     
     localparam R_STATUS = 2'b00,
                R_CURSL  = 2'b01,
-               R_CURSH  = 2'b10,
-               R_ATTRIB = 2'b11;
+               R_CURSH  = 2'b10;
     
-    reg  [1:0]  status_reg;         // STATUS
+    reg  [2:0]  status_reg;         // STATUS
     reg  [7:0]  cursl_reg;          // CURSL
     reg  [3:0]  cursh_reg;          // CURSH
     wire [11:0] curs_addr;          // 12-bit cursor address
-    reg  [7:0]  attrib_reg;         // ATTRIB
     
     assign curs_addr = {cursh_reg, cursl_reg};
     
     // control registers input
-    initial status_reg = 2'b00;     // cursor disabled, output disabled
+    initial status_reg = 3'b000;    // display page, cursor off, output off
     initial cursl_reg  = 8'd0;      // cursor at (0,0)
     initial cursh_reg  = 4'h0;
-    initial attrib_reg = 8'd0;
     always @(posedge clk_cpu_i)
         if(reg_en_i)
             if(reg_we_i)
                 case(regsel_i)
-                    R_STATUS: status_reg <= #1 reg_din_i[1:0];
+                    R_STATUS: status_reg <= #1 reg_din_i[2:0];
                     R_CURSL:  cursl_reg  <= #1 reg_din_i;
                     R_CURSH:  cursh_reg  <= #1 reg_din_i[3:0];
-                    R_ATTRIB: attrib_reg <= #1 reg_din_i;
                 endcase
     
     // control registers output
@@ -142,10 +138,9 @@ module VGAController
     always @(posedge clk_cpu_i)
         if(reg_en_i)
             case(regsel_i)
-                R_STATUS: reg_dout_o <= #1 {6'b0000_00, status_reg};
+                R_STATUS: reg_dout_o <= #1 {5'b0000_0, status_reg};
                 R_CURSL:  reg_dout_o <= #1 cursl_reg;
                 R_CURSH:  reg_dout_o <= #1 {4'b0000, cursh_reg};
-                R_ATTRIB: reg_dout_o <= #1 attrib_reg;
                 default:  reg_dout_o <= #1 8'd0;
             endcase
     
@@ -189,9 +184,18 @@ module VGAController
     
 /* VIDEO RAM ******************************************************************/
     
+    wire        display_ram_en;     // display RAM enable
+    wire        attribute_ram_en;   // attribute RAM enable
     wire [5:0]  char_row;           // character row
+    wire [7:0]  vram2cpu_display_data;
+    wire [7:0]  vram2cpu_attribute_data;
     wire [11:0] vga2vram_addr;      // VGA controller to video RAM address
-    wire [7:0]  vram2vga_data;      // video RAM to VGA controller data
+    wire [7:0]  display_data;       // display RAM to VGA controller data
+    wire [7:0]  attribute_data;     // attribute RAM to VGA controller data
+    
+    // display and attribute RAM enables
+    assign display_ram_en   = vram_en_i & (~status_reg[2]);
+    assign attribute_ram_en = vram_en_i & status_reg[2];
     
     // character row equals scan line mod 16
     assign char_row = crtc_line[9:4];
@@ -201,26 +205,51 @@ module VGAController
                            {char_row, 6'b00_0000} +
                            {2'b00, char_row, 4'b0000};
     
-    // 4K x 8-bit dual-port video RAM
+    // 4K x 8-bit dual-port video RAM (display page)
     VRAM_BRAM
         #(
         .WIDTH(8),
         .DEPTH(4096)
         )
-        VideoRAM
+        DisplayRAM
         (
         .clka_i (clk_cpu_i),
-        .ena_i  (vram_en_i),
+        .ena_i  (display_ram_en),
         .wea_i  (vram_we_i),
         .addra_i(vram_addr_i),
         .dia_i  (vram_din_i),
-        .doa_o  (vram_dout_o),
+        .doa_o  (vram2cpu_display_data),
         
         .clkb_i (clk_pixel_i),
         .enb_i  (crtc_new_col_stb),
         .addrb_i(vga2vram_addr),
-        .dob_o  (vram2vga_data)
+        .dob_o  (display_data)
         );
+    
+    // 4K x 8-bit dual-port video RAM (attribute page)
+    VRAM_BRAM
+        #(
+        .WIDTH(8),
+        .DEPTH(4096)
+        )
+        AttributeRAM
+        (
+        .clka_i (clk_cpu_i),
+        .ena_i  (attribute_ram_en),
+        .wea_i  (vram_we_i),
+        .addra_i(vram_addr_i),
+        .dia_i  (vram_din_i),
+        .doa_o  (vram2cpu_attribute_data),
+        
+        .clkb_i (clk_pixel_i),
+        .enb_i  (crtc_new_col_stb),
+        .addrb_i(vga2vram_addr),
+        .dob_o  (attribute_data)
+        );
+    
+    // output logic
+    assign vram_dout_o = (status_reg[2]) ? vram2cpu_attribute_data
+                                         : vram2cpu_display_data;
     
     
 /* CHARACTER GENERATOR ********************************************************/
@@ -243,7 +272,7 @@ module VGAController
         (
         .clk_i      (clk_pixel_i),
         .we_i       (char_gen_we_ff),
-        .ascii_i    (vram2vga_data),
+        .ascii_i    (display_data),
         .glyph_row_i(glyph_row_reg),
         .pixel_o    (char_gen_pixel)
         );
@@ -264,7 +293,7 @@ module VGAController
         (
         .clk_i   (clk_pixel_i),
         .en_i    (attr_en_ff),
-        .attr_i  (attrib_reg),
+        .attr_i  (attribute_data),
         .fg_rgb_o(attr_fg_rgb),
         .bg_rgb_o(attr_bg_rgb)
         );

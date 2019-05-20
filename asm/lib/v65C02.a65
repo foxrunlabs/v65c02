@@ -58,3 +58,60 @@
             rts                         ; jump to BIOS sub-routine
 
 .endproc
+
+
+;= CLRSCR ======================================================================
+; Clears the screen with NUL characters using the attribute stored at ATTR.
+;
+; Parameters: None
+; Returns:    None
+;
+; Destroys:   A
+
+.CODE
+
+.proc clrscr
+            
+            lda     #VGA_EN
+            trb     VGA_STATUS          ; VGA off
+            
+            lda     #.HIBYTE($B000)
+            sta     VRAMH
+            lda     #.LOBYTE($B000)
+            sta     VRAML               ; (VRAM) = VRAM start address
+            
+            lda     #VGA_PAGE
+            trb     VGA_STATUS          ; select display page
+            
+            ;- clear VRAM ------------------------------------------------------
+@loop0:     lda     #NUL
+            sta     (VRAM)              ; store NUL to VRAM
+            
+            lda     #VGA_PAGE
+            tsb     VGA_STATUS          ; select attribute page
+            
+            lda     ATTR
+            sta     (VRAM)              ; store ATTR to VRAM
+            
+            lda     #VGA_PAGE
+            trb     VGA_STATUS          ; select display page
+            
+            inc     VRAML               ; increment VRAM address LSB
+            bne     @loop0              ; roll over to $00? no, loop
+            
+            inc     VRAMH               ; increment VRAM address MSB
+            lda     VRAMH
+            cmp     #.HIBYTE($B000 + (80 * 30))
+            bne     @loop0              ; equal to VRAM upper limit? no, loop
+            
+            stz     VGA_CURSH
+            stz     VGA_CURSL           ; set cursor to (0,0)
+            stz     COL
+            stz     ROW                 ; update stored cursor coordinates
+            
+            lda     #VGA_EN
+            tsb     VGA_STATUS          ; VGA on
+            
+            rts
+
+.endproc

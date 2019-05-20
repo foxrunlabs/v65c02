@@ -39,7 +39,10 @@
 
 .DEFINE     VERSION .CONCAT("v65C02 BIOS v", "1.0.0")
 
-            ATTRIB = (BLUE << 4) | YELLOW       ; yellow on blue text
+            ATTRIB = (BLACK << 4) | LIGHT_GRAY  ; light gray on black
+            
+            NUMCOLS = 80                        ; 80 character columns
+            NUMROWS = 30                        ; 30 character rows
 
 
 ;===============================================================================
@@ -50,10 +53,7 @@
 
 ;= ENTRY POINT =================================================================
 
-bios:       stz     VGA_STATUS          ; disable VGA and cursor
-            
-            lda     #ATTRIB             ; A = default screen attribute
-            sta     VGA_ATTRIB          ; store attribute to ATTRIB register
+bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
             
             lda     #.HIBYTE(__VRAM_START__)
             sta     VRAMH
@@ -63,6 +63,16 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             ;- clear VRAM ------------------------------------------------------
 @clrscr:    lda     #NUL                ; A = NUL
             sta     (VRAM)              ; store NUL to VRAM
+            
+            lda     #VGA_PAGE           ; A = PAGE bit mask
+            tsb     VGA_STATUS          ; set attribute page
+            
+            lda     #ATTRIB             ; A = default screen attribute
+            sta     (VRAM)              ; store to VRAM
+            
+            lda     #VGA_PAGE           ; A = PAGE bit mask
+            trb     VGA_STATUS          ; set display page
+            
             inc     VRAML               ; increment VRAM address LSB
             bne     @clrscr             ; roll over to $00? no, loop
             
@@ -75,9 +85,11 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             stz     VGA_CURSL           ; set cursor to (0,0)
             stz     COL
             stz     ROW                 ; update stored cursor coordinates
+            lda     #ATTRIB
+            sta     ATTR                ; set ATTR to default screen attribute
             
             lda     #VGA_EN             ; VGA enabled, cursor disabled
-            sta     VGA_STATUS          ; write new status register
+            sta     VGA_STATUS          ; VGA on, cursor off, sel. display page
             
             ;- SSEG initialization ---------------------------------------------
             stz     SSEG_DIGITS
@@ -153,7 +165,7 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
 ;
 ; Destroys: X, VRAML, VRAMH
 ;
-; Cycles (jsr->rts): 63-193
+; Cycles (jsr->rts):
 
 .proc putch
             
@@ -169,17 +181,17 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
 @lf:        ldx     #0                  ; column = 0
             lda     ROW                 ; A = row
             inc     A                   ; row++
-            cmp     #30
-            bne     @setcurs            ; 30? nope
+            cmp     #NUMROWS
+            bne     @setcurs            ; NUMROWS? nope
             
             jsr     scrolldn            ; scroll display
-            lda     #29                 ; row = 29
+            lda     #(NUMROWS - 1)      ; row = NUMROWS - 1
             bra     @setcurs
                         
             ;- process HT ----------_-------------------------------------------
 @ht:        lda     COL                 ; A = column
-            cmp     #72
-            bcs     @lf                 ; column >= 72? new line
+            cmp     #(NUMCOLS - 8)
+            bcs     @lf                 ; column >= NUMROWS - 8? new line
             
             and     #%11111000          ; clear lower three bits of column
             adc     #8                  ; advance to next tab stop (carry clear)
@@ -193,7 +205,7 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             dex                         ; column--
             bpl     @setcurs            ; bit 7 set? nope, set cursor
             
-            ldx     #79                 ; column = 79
+            ldx     #(NUMCOLS - 1)      ; column = 79
             dec     A                   ; row--
             bmi     @exit               ; negative? do nothing
             bra     @setcurs            ; set cursor
@@ -207,11 +219,23 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             ora     #.HIBYTE(__VRAM_START__)
             sta     VRAMH               ; (VRAM) = 16-bit VRAM address
             
+            lda     #VGA_PAGE           ; A = PAGE bit mask
+            trb     VGA_STATUS          ; select display page
+            
             txa                         ; restore character
             sta     (VRAM)              ; write character to screen
             
+            lda     #VGA_PAGE
+            tsb     VGA_STATUS          ; select attribute page
+            
+            lda     ATTR
+            sta     (VRAM)              ; write attribute
+            
+            lda     #VGA_PAGE
+            trb     VGA_STATUS          ; select display page
+            
             ldx     COL                 ; X = current column
-            cpx     #79
+            cpx     #(NUMCOLS - 1)
             beq     @lf                 ; column == 79? new line
 
             inx                         ; column++
@@ -324,13 +348,25 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     #.LOBYTE(__VRAM_START__)
             sta     VRAML               ; (VRAM) = address of (0,0)
             
-            lda     #.HIBYTE(__VRAM_START__ + 80)
+            lda     #.HIBYTE(__VRAM_START__ + NUMCOLS)
             sta     SCROLLH
-            lda     #.LOBYTE(__VRAM_START__ + 80)
+            lda     #.LOBYTE(__VRAM_START__ + NUMCOLS)
             sta     SCROLLL             ; (SCROLL) = address of (0,1)
+            
+            lda     #VGA_PAGE
+            trb     VGA_STATUS          ; select display page
             
 @loop0:     lda     (SCROLL)            ; save character from line below
             sta     (VRAM)              ; copy to line above
+            
+            lda     #VGA_PAGE           ; A = PAGE bit mask
+            tsb     VGA_STATUS          ; select attribute page
+            
+            lda     (SCROLL)            ; save attribute from line below
+            sta     (VRAM)              ; copy to line above
+            
+            lda     #VGA_PAGE           ; A = PAGE bit mask
+            trb     VGA_STATUS          ; select display page
             
             inc     VRAML
             bne     @incscroll          ; VRAML++ rollover to 00? nope
@@ -342,18 +378,28 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             
             ;- bounds check (SCROLL) against screen end ------------------------            
 @bounds:    lda     SCROLLH
-            cmp     #.HIBYTE(__VRAM_START__ + (80 * 30))
+            cmp     #.HIBYTE(__VRAM_START__ + (NUMCOLS * NUMROWS))
             bne     @loop0
             lda     SCROLLL
-            cmp     #.LOBYTE(__VRAM_START__ + (80 * 30))
+            cmp     #.LOBYTE(__VRAM_START__ + (NUMCOLS * NUMROWS))
             bne     @loop0
             
             ;- clear bottom line -----------------------------------------------
 @loop1:     lda     #NUL
             sta     (VRAM)
+            
+            lda     #VGA_PAGE
+            tsb     VGA_STATUS          ; select attribute page
+            
+            lda     ATTR
+            sta     (VRAM)              ; default attribute
+            
+            lda     #VGA_PAGE
+            trb     VGA_STATUS          ; select display page
+            
             inc     VRAML
             lda     VRAML
-            cmp     #.LOBYTE(__VRAM_START__ + (80 * 30))
+            cmp     #.LOBYTE(__VRAM_START__ + (NUMCOLS * NUMROWS))
             bne     @loop1    
             
             rts

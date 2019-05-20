@@ -54,27 +54,28 @@ RF = $0F
 ;- console routines ------------------------------------------------------------
 COL     = $10               ; current cursor column
 ROW     = $11               ; current cursor row
-VRAM    = $12               ; video RAM pointer
-VRAML   = $12               ; video RAM pointer LSB
-VRAMH   = $13               ; video RAM pointer MSB
-STR     = $14               ; string pointer (puts routine)
-STRL    = $14               ; string pointer LSB
-STRH    = $15               ; string pointer MSB
-CURS    = $16               ; cursor address
-CURSL   = $16               ; cursor address LSB
-CURSH   = $17               ; cursor address MSB
-CURSTMP = $18               ; cursor temp (gotoxy routine)
-SCROLL  = $19               ; next line video RAM pointer (scrolldn routine)
-SCROLLL = $19               ; next line video RAM pointer LSB
-SCROLLH = $1A               ; next line video RAM pointer MSB
+ATTR    = $12               ; character attribute
+VRAM    = $13               ; video RAM pointer
+VRAML   = $13               ; video RAM pointer LSB
+VRAMH   = $14               ; video RAM pointer MSB
+STR     = $15               ; string pointer (puts routine)
+STRL    = $15               ; string pointer LSB
+STRH    = $16               ; string pointer MSB
+CURS    = $17               ; cursor address
+CURSL   = $17               ; cursor address LSB
+CURSH   = $18               ; cursor address MSB
+CURSTMP = $19               ; cursor temp (gotoxy routine)
+SCROLL  = $1A               ; next line video RAM pointer (scrolldn routine)
+SCROLLL = $1A               ; next line video RAM pointer LSB
+SCROLLH = $1B               ; next line video RAM pointer MSB
 
 ;- call table address ----------------------------------------------------------
-BIOSTL  = $1b               ; call table (LSB) pointer
-BIOSTLL = $1B               ; call table (LSB) pointer LSB
-BIOSTLH = $1C               ; call table (LSB) pointer MSB
-BIOSTH  = $1D               ; call table (MSB) pointer
-BIOSTHL = $1D               ; call table (MSB) pointer LSB
-BIOSTHH = $1E               ; call table (MSB) pointer MSB
+BIOSTL  = $1C               ; call table (LSB) pointer
+BIOSTLL = $1C               ; call table (LSB) pointer LSB
+BIOSTLH = $1D               ; call table (LSB) pointer MSB
+BIOSTH  = $1E               ; call table (MSB) pointer
+BIOSTHL = $1E               ; call table (MSB) pointer LSB
+BIOSTHH = $1F               ; call table (MSB) pointer MSB
 
 
 ;= ROM MONITOR =================================================================
@@ -170,7 +171,6 @@ VGA         = IO + 0
 VGA_STATUS  = VGA + 0
 VGA_CURSL   = VGA + 1
 VGA_CURSH   = VGA + 2
-VGA_ATTRIB  = VGA + 3
 
 ;- device 1 --------------------------------------------------------------------
 SSEG        = IO + $10
@@ -239,18 +239,19 @@ DEVICE15    = IO + $F0
 ;= DEVICE REGISTERS ============================================================
 
 ;- VGA status register bits ----------------------------------------------------
-VGA_EN      = %00000001                 ; EN bit of VGA STATUS register
-VGA_CURS    = %00000010                 ; CURS bit mask for VGA STATUS register
+VGA_EN       = %00000001                ; EN bit mask of VGA STATUS register
+VGA_CURS     = %00000010                ; CURS bit mask for VGA STATUS register
+VGA_PAGE     = %00000100                ; PAGE bit mask for VGA STATUS register
 
 ;- keyboard status register bits -----------------------------------------------
 KBD_DATAFULL = %00000001                ; keyboard data register full
 
 ;- UART status register bits ---------------------------------------------------
-UART_TXBUSY = %00000001                 ; UART transmit busy
-UART_RXFULL = %00000010                 ; UART receive buffer full
+UART_TXBUSY  = %00000001                ; UART transmit busy
+UART_RXFULL  = %00000010                ; UART receive buffer full
 
 ;- timer status register bits --------------------------------------------------
-TMR_OVRFL   = %00000001                 ; timer overflow
+TMR_OVRFL    = %00000001                ; timer overflow
 
 
 ;= UART baud rate generator values ---------------------------------------------
