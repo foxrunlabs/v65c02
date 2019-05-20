@@ -63,13 +63,13 @@ module v65C02_Top
 /* CLOCK GENERATOR ************************************************************/
     
     wire clk_cpu;                       // 50 MHz CPU clock
-    wire clk_pixel;                     // 28.322 MHz VGA pixel clock
+    wire clk_pixel;                     // 25.175 MHz VGA pixel clock
     
     Clock Clock
         (
         .clk_100M_i   (CLK100MHZ),
         .clk_50M_o    (clk_cpu),
-        .clk_28_322M_o(clk_pixel)
+        .clk_25_175M_o(clk_pixel)
         );
     
     
@@ -113,11 +113,12 @@ module v65C02_Top
     
     assign bios_en = (& cpu_addr[15:14]);   // BIOS = $C000 -> $FFFF
     
+    // 16K x 8-bit ROM
     ROM_BRAM
         #(
         .WIDTH    (8),
         .DEPTH    (16384),
-        .INIT_FILE("../../bram_data/bios.hex")
+        .INIT_FILE("bios.hex")
         )
         BIOS
         (
@@ -133,9 +134,15 @@ module v65C02_Top
     wire       ram_en;                          // RAM select
     wire [7:0] ram_dout;                        // RAM 8-bit data out
     
-    assign ram_en = (cpu_addr[15:12] < 4'hB);   // RAM = $0000 -> $AFFF
+    assign ram_en = (cpu_addr[15:8] < 8'hAF);   // RAM = $0000 -> $AEFF
     
-    RAM_44K8 RAM
+    // 44K x 8-bit RAM
+    RAM_BRAM
+        #(
+        .WIDTH(8),
+        .DEPTH(45056)
+        )
+        RAM
         (
         .clk_i (clk_cpu),
         .en_i  (ram_en),
@@ -148,25 +155,25 @@ module v65C02_Top
     
 /* IO PORTS *******************************************************************/
     
-    localparam P_VGA  = 5'd0,
-               P_SSEG = 5'd1,
-               P_UART = 5'd2,
-               P_KBD  = 5'd3,
-               P_TMR  = 5'd4;
+    localparam P_VGA  = 4'h0,
+               P_SSEG = 4'h1,
+               P_UART = 4'h2,
+               P_KBD  = 4'h3,
+               P_TMR  = 4'h4;
     
     wire       io_en;
-    wire [4:0] port;
+    wire [3:0] port;
     wire       vga_reg_en;
     wire       sseg_en;
     wire       uart_en;
     wire       kbd_en;
     wire       tmr_en; 
     
-    // IO ports = $BFA0 -> $BFFF
-    assign io_en = (cpu_addr[15:12] == 4'hB) & (cpu_addr[11:0] > 12'hF9F);
+    // IO ports = $AF00 -> $AFFF
+    assign io_en = (cpu_addr[15:8] == 8'hAF);
     
-    // 12 IO ports from $BFA0 to $BFF8 (8 registers per port)
-    assign port = cpu_addr[7:3] - 5'd20;
+    // 16 IO ports from $AF00 to $AFF0 (16 registers per port)
+    assign port = cpu_addr[7:4];
     
     // port enables
     assign vga_reg_en = io_en & (port == P_VGA);
@@ -179,14 +186,15 @@ module v65C02_Top
 /* VGA CONTROLLER *************************************************************/
     
     wire        vga_vram_en;                // video RAM select
+    wire [11:0] vga_vram_addr;              // 12-bit video RAM address
     wire [7:0]  vga_vram_dout;              // 8-bit video RAM output
     wire [7:0]  vga_reg_dout;               // 8-bit register output
     wire [11:0] vga_rgb;                    // 12-bit RGB444 output
     wire        vga_hsync;                  // horizontal sync
     wire        vga_vsync;                  // vertical sync
     
-    // VRAM = $B000 -> $BF9F
-    assign vga_vram_en = (cpu_addr[15:12] == 4'hB) & (cpu_addr[11:0] < 12'hFA0);
+    // VRAM = $B000 -> $BFFF
+    assign vga_vram_en = (cpu_addr[15:12] == 4'hB);
     
     VGAController VGAController
         (

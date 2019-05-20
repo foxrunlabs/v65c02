@@ -23,7 +23,7 @@ Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
-Purpose : BRAM based synchronous ROM.
+Purpose : BRAM based synchronous ROM for the v65C02 8-bit Computer.
 
           Can initialize the ROM with a hexadecimal formatted text file.
 *******************************************************************************/
@@ -49,7 +49,7 @@ module ROM_BRAM
     // block RAM
     (* rom_style = "block" *) reg [(WIDTH - 1):0] rom_reg [0:(DEPTH - 1)];
     
-    // Initialize the ROM with an init file, otherwise zero out the data
+    // initialize the ROM with an init file, otherwise zero out the data
     generate
         if(INIT_FILE != "") begin : init_file
             initial $readmemh(INIT_FILE, rom_reg, 0, (DEPTH - 1));
@@ -62,7 +62,7 @@ module ROM_BRAM
         end
     endgenerate
     
-    // ROM register
+    // output register
     initial dout_o = 8'h00;
     always @(posedge clk_i)
         if(en_i)

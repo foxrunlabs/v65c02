@@ -28,7 +28,8 @@ SHELL = /bin/sh
 
 prefix      = ..
 exec_prefix = $(prefix)
-bin_dir     = $(exec_prefix)/bram_data
+bram_dir    = $(exec_prefix)/bram_data
+hex_dir     = $(exec_prefix)/hdl/memory
 
 BIOS     = bios.rom
 BIOS_MEM = bios.mem
@@ -61,8 +62,8 @@ $(BIOS) : $(OBJECTS)
 	$(BIN2HEX) $@
 
 install :
-	@cp -v $(BIOS_MEM) $(bin_dir)
-	@cp -v $(BIOS_HEX) $(bin_dir)
+	@cp -v $(BIOS_MEM) $(bram_dir)
+	@cp -v $(BIOS_HEX) $(hex_dir)
 
 clean :
 	@rm -fv *.lst

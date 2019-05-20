@@ -33,17 +33,14 @@ module CharacterGenerator_tb;
     
 /* INPUTS *********************************************************************/
     
-    reg        clk_i;
-    reg        en_i;
-    reg  [3:0] glyph_row_i;
-    reg  [7:0] ascii_i;
-    wire [7:0] rom2gen_data;
+    reg       clk_i;
+    reg       we_i;
+    reg [7:0] ascii_i;
+    reg [3:0] glyph_row_i;
     
     
 /* OUTPUTS  *******************************************************************/
     
-    wire        rd_stb_o;
-    wire [11:0] gen2rom_addr;
     wire        pixel_o;
     
     
@@ -52,27 +49,16 @@ module CharacterGenerator_tb;
     CharacterGenerator CharacterGenerator_uut
         (
         .clk_i      (clk_i),
-        .en_i       (en_i),
-        .glyph_row_i(glyph_row_i),
+        .we_i       (we_i),
         .ascii_i    (ascii_i),
-        .rd_stb_o   (rd_stb_o),
-        .addr_o     (gen2rom_addr),
-        .din_i      (rom2gen_data),
+        .glyph_row_i(glyph_row_i),
         .pixel_o    (pixel_o)
-        );
-    
-    ROM_4K8 CharacterROM
-        (
-        .clk_i (clk_i),
-        .en_i  (en_i),
-        .addr_i(gen2rom_addr),
-        .dout_o(rom2gen_data)
         );
     
     
 /* CLOCK **********************************************************************/
     
-    localparam T_clk = 10;          // clock period (ns)
+    localparam T_clk = 20;          // clock period (ns)
     
     always begin
         clk_i = 1'b1;
@@ -86,40 +72,40 @@ module CharacterGenerator_tb;
 /* MAIN ***********************************************************************/
     
     initial begin
-        en_i        = 1'b0;
-        glyph_row_i = 4'h0;
+        we_i        = 1'b0;
         ascii_i     = 8'h00;
+        glyph_row_i = 4'h0;
         
-        // ASCII and glyph data (01110111 + 0)
+        // ASCII and glyph data (01110111)
         #1;
-        en_i        = 1'b1;
+        we_i        = 1'b1;
         ascii_i     = 8'd178;
         glyph_row_i = 4'h1;
         @(posedge clk_i);
         
         // valid character ROM
         #1;
-        en_i = 1'b0;
+        we_i = 1'b0;
         @(posedge clk_i)
         
-        // generate 9 pixels
-        repeat(9)
+        // generate 8 pixels
+        repeat(8)
             @(posedge clk_i);
         
-        // ASCII and glyph data (11111111 + 1)
+        // ASCII and glyph data (11111111)
         #1;
-        en_i        = 1'b1;
+        we_i        = 1'b1;
         ascii_i     = 8'd219;
         glyph_row_i = 4'h0;
         @(posedge clk_i);
         
         // valid character ROM
         #1;
-        en_i = 1'b0;
+        we_i = 1'b0;
         @(posedge clk_i)
         
-        // generate 9 pixels
-        repeat(9)
+        // generate 8 pixels
+        repeat(8)
             @(posedge clk_i);
         
         // done

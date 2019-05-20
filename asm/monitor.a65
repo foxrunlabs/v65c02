@@ -45,7 +45,6 @@
 
 ;= CONSTANTS ===================================================================
 
-            ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
             CMDMAX = 79                             ; CMDLN length (minus NUL)
 
 
@@ -531,14 +530,9 @@ xmodem:     lda     #1                      ; first block = 1
             lda     ROW
             bios    #3                  ; set cursor to (0,ROW)
             
-            lda     VGA_CURSH
-            sta     VRAMH
             lda     VGA_CURSL
-            sta     VRAML               ; (VRAM) = 11-bit cursor address
-            
-            asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
-            rol     VRAMH
-            lda     VRAMH
+            sta     VRAML               ; (VRAM) = 12-bit cursor address
+            lda     VGA_CURSH
             ora     #.HIBYTE(__VRAM_START__)
             sta     VRAMH               ; (VRAM) = 16-bit VRAM address
             
@@ -546,11 +540,8 @@ xmodem:     lda     #1                      ; first block = 1
 @loop:      lda     #NUL                ; A = NUL
             sta     (VRAM), Y           ; (VRAM) = NUL
             iny                         ; Y++
-            lda     ATTR                ; A = attribute
-            sta     (VRAM), Y           ; (VRAM) = attribute
-            iny                         ; Y++
-            cpy     #160
-            bne     @loop               ; Y == 160? nope, keep clearing
+            cpy     #80
+            bne     @loop               ; Y == 80? nope, keep clearing
             
             rts
 

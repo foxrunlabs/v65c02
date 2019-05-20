@@ -38,33 +38,46 @@ module CRTC_tb;
     
 /* OUTPUTS  *******************************************************************/
     
-    wire       col_stb_o;
+    wire       new_col_stb_o;
     wire [6:0] col_o;
-    wire [8:0] line_o;
-    wire       cursor_o;
+    wire [9:0] line_o;
     wire       hsync_o;
     wire       vsync_o;
+    wire       cursor_o;
     wire       video_on_o;
     
     
 /* MODULES ********************************************************************/
     
-    CRTC CRTC_uut
+    CRTC
+        #(
+        .HS_TOTAL (7'd100),
+        .HS_ACTIVE(7'd80),
+        .HS_START (7'd82),
+        .HS_TIME  (7'd12),
+        .HS_POL   (1'b0),
+        .VS_TOTAL (10'd525),
+        .VS_ACTIVE(10'd480),
+        .VS_START (10'd490),
+        .VS_TIME  (10'd2),
+        .VS_POL   (1'b0)
+        )
+        CRTC_uut
         (
-        .clk_i     (clk_i),
-        .col_stb_o (col_stb_o),
-        .col_o     (col_o),
-        .line_o    (line_o),
-        .cursor_o  (cursor_o),		
-        .hsync_o   (hsync_o),
-        .vsync_o   (vsync_o),
-        .video_on_o(video_on_o)
+        .clk_i        (clk_i),
+        .new_col_stb_o(new_col_stb_o),
+        .col_o        (col_o),
+        .line_o       (line_o),		
+        .hsync_o      (hsync_o),
+        .vsync_o      (vsync_o),
+        .cursor_o     (cursor_o),
+        .video_on_o   (video_on_o)
         );
     
     
 /* CLOCK **********************************************************************/
     
-    localparam T_clk = 10;          // clock period (ns)
+    localparam T_clk = 40;          // clock period (ns)
     
     always begin
         clk_i = 1'b1;

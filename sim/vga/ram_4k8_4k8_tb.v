@@ -17,8 +17,8 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : RAM_4K8_2K16_tb
-File Name   : ram_4k8_2k16_tb.v
+Module Name : RAM_4K8_4K8_tb
+File Name   : ram_4k8_4k8_tb.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -28,7 +28,7 @@ Purpose : Verilog test bench for module RAM_4K8_2K16 associated with the v65C02
 *******************************************************************************/
 
 
-module RAM_4K8_2K16_tb;
+module RAM_4K8_4K8_tb;
     
     
 /* INPUTS *********************************************************************/
@@ -39,14 +39,14 @@ module RAM_4K8_2K16_tb;
     reg        enb_i;
     reg        wea_i;
     reg [11:0] addra_i;
-    reg [10:0] addrb_i;
+    reg [11:0] addrb_i;
     reg [7:0]  dia_i;
     
     
 /* OUTPUTS  *******************************************************************/
     
-    wire [7:0]  doa_o;
-    wire [15:0] dob_o;
+    wire [7:0] doa_o;
+    wire [7:0] dob_o;
     
     
 /* CONSTANTS ******************************************************************/
@@ -58,7 +58,7 @@ module RAM_4K8_2K16_tb;
     
 /* MODULES ********************************************************************/
     
-    RAM_4K8_2K16 RAM_4K8_2K16_uut
+    RAM_4K8_4K8 RAM_4K8_4K8_uut
         (
         .clka_i (clka_i),
         .ena_i  (ena_i),
@@ -66,6 +66,7 @@ module RAM_4K8_2K16_tb;
         .addra_i(addra_i),
         .dia_i  (dia_i),
         .doa_o  (doa_o),
+        
         .clkb_i (clkb_i),
         .enb_i  (enb_i),
         .addrb_i(addrb_i),

@@ -32,7 +32,7 @@ module Clock
     input  wire clk_100M_i,         // 100 MHz input clock
     
     output wire clk_50M_o,          // 50 MHz CPU clock
-    output wire clk_28_322M_o       // 28.322 MHz VGA pixel clock
+    output wire clk_25_175M_o       // 25.175 MHz VGA pixel clock
     );
     
     
@@ -51,7 +51,7 @@ module Clock
     
     wire clkfbout;
     wire clk_50M;
-    wire clk_28_322M;
+    wire clk_25_175M;
     
     MMCME2_BASE
         #(
@@ -59,7 +59,7 @@ module Clock
         .CLKFBOUT_MULT_F   (8.000),
         .CLKFBOUT_PHASE    (0.000),
         .CLKIN1_PERIOD     (10.000),
-        .CLKOUT0_DIVIDE_F  (28.250),
+        .CLKOUT0_DIVIDE_F  (31.750),
         .CLKOUT0_DUTY_CYCLE(0.500),
         .CLKOUT0_PHASE     (0.000),
         .CLKOUT1_DIVIDE    (16),
@@ -76,7 +76,7 @@ module Clock
         .CLKIN1   (clk_100M_buf),
         .RST      (1'b0),
         .PWRDWN   (1'b0),
-        .CLKOUT0  (clk_28_322M),
+        .CLKOUT0  (clk_25_175M),
         .CLKOUT0B (),
         .CLKOUT1  (clk_50M),
         .CLKOUT1B (),
@@ -102,10 +102,10 @@ module Clock
         .O(clk_50M_o)
         );
     
-    BUFG clk_28_322M_bufg
+    BUFG clk_25_175M_bufg
         (
-        .I(clk_28_322M),
-        .O(clk_28_322M_o)
+        .I(clk_25_175M),
+        .O(clk_25_175M_o)
         );
     
 endmodule

@@ -111,26 +111,30 @@ module VGAController
     
     localparam R_STATUS = 2'b00,
                R_CURSL  = 2'b01,
-               R_CURSH  = 2'b10;
+               R_CURSH  = 2'b10,
+               R_ATTRIB = 2'b11;
     
     reg  [1:0]  status_reg;         // STATUS
-    reg  [7:0]  curs_lsb_reg;       // CURS_LSB
-    reg  [2:0]  curs_msb_reg;       // CURS_MSB
-    wire [10:0] curs_addr;          // 11-bit cursor address
+    reg  [7:0]  cursl_reg;          // CURSL
+    reg  [3:0]  cursh_reg;          // CURSH
+    wire [11:0] curs_addr;          // 12-bit cursor address
+    reg  [7:0]  attrib_reg;         // ATTRIB
     
-    assign curs_addr = {curs_msb_reg, curs_lsb_reg};
+    assign curs_addr = {cursh_reg, cursl_reg};
     
     // control registers input
-    initial status_reg   = 2'b00;   // cursor disabled, output disabled
-    initial curs_lsb_reg = 8'd0;    // cursor at (0,0)
-    initial curs_msb_reg = 3'o0;
+    initial status_reg = 2'b00;     // cursor disabled, output disabled
+    initial cursl_reg  = 8'd0;      // cursor at (0,0)
+    initial cursh_reg  = 4'h0;
+    initial attrib_reg = 8'd0;
     always @(posedge clk_cpu_i)
         if(reg_en_i)
             if(reg_we_i)
                 case(regsel_i)
-                    R_STATUS: status_reg   <= #1 reg_din_i[1:0];
-                    R_CURSL:  curs_lsb_reg <= #1 reg_din_i;
-                    R_CURSH:  curs_msb_reg <= #1 reg_din_i[2:0];
+                    R_STATUS: status_reg <= #1 reg_din_i[1:0];
+                    R_CURSL:  cursl_reg  <= #1 reg_din_i;
+                    R_CURSH:  cursh_reg  <= #1 reg_din_i[3:0];
+                    R_ATTRIB: attrib_reg <= #1 reg_din_i;
                 endcase
     
     // control registers output
@@ -139,49 +143,71 @@ module VGAController
         if(reg_en_i)
             case(regsel_i)
                 R_STATUS: reg_dout_o <= #1 {6'b0000_00, status_reg};
-                R_CURSL:  reg_dout_o <= #1 curs_lsb_reg;
-                R_CURSH:  reg_dout_o <= #1 {5'b0000_0, curs_msb_reg};
+                R_CURSL:  reg_dout_o <= #1 cursl_reg;
+                R_CURSH:  reg_dout_o <= #1 {4'b0000, cursh_reg};
+                R_ATTRIB: reg_dout_o <= #1 attrib_reg;
                 default:  reg_dout_o <= #1 8'd0;
             endcase
     
     
 /* CRT CONTROLLER *************************************************************/
     
-    wire [6:0]  crtc_col;           // character column
-    wire [8:0]  crtc_line;          // scan line
-    wire        crtc_col_stb;       // new column strobe
+    wire        crtc_new_col_stb;   // new column strobe
+    wire [6:0]  crtc_col;           // column
+    wire [9:0]  crtc_line;          // scan line
     wire        crtc_hsync;         // horizontal sync
     wire        crtc_vsync;         // vertical sync
     wire        crtc_cursor;        // cursor timing
     wire        crtc_video_on;      // active video flag
     
-    CRTC CRTC
+    CRTC
+        #(
+        // 640 x 480 @ 60 Hz (25.175 MHz pixel clock)
+        .HS_TOTAL (7'd100),
+        .HS_ACTIVE(7'd80),
+        .HS_START (7'd82),
+        .HS_TIME  (7'd12),
+        .HS_POL   (1'b0),
+        .VS_TOTAL (10'd525),
+        .VS_ACTIVE(10'd480),
+        .VS_START (10'd490),
+        .VS_TIME  (10'd2),
+        .VS_POL   (1'b0)
+        )
+        CRTC
         (
-        .clk_i     (clk_pixel_i),
-        .col_stb_o (crtc_col_stb),
-        .col_o     (crtc_col),
-        .line_o    (crtc_line),
-        .hsync_o   (crtc_hsync),
-        .vsync_o   (crtc_vsync),
-        .cursor_o  (crtc_cursor),
-        .video_on_o(crtc_video_on)
+        .clk_i        (clk_pixel_i),
+        .new_col_stb_o(crtc_new_col_stb),
+        .col_o        (crtc_col),
+        .line_o       (crtc_line),
+        .hsync_o      (crtc_hsync),
+        .vsync_o      (crtc_vsync),
+        .cursor_o     (crtc_cursor),
+        .video_on_o   (crtc_video_on)
         );
     
     
 /* VIDEO RAM ******************************************************************/
     
-    wire [4:0]  char_row;           // character row
-    wire [10:0] vga2vram_addr;      // VGA controller to video RAM address
-    wire [15:0] vram2vga_data;      // video RAM to VGA controller data
+    wire [5:0]  char_row;           // character row
+    wire [11:0] vga2vram_addr;      // VGA controller to video RAM address
+    wire [7:0]  vram2vga_data;      // video RAM to VGA controller data
     
     // character row equals scan line mod 16
-    assign char_row = crtc_line[8:4];
+    assign char_row = crtc_line[9:4];
     
     // linear RAM addressing: x + 80y = x + (y << 6) + (y << 4)
-    assign vga2vram_addr = {4'b0000, crtc_col} + {char_row, 6'b00_0000} +
+    assign vga2vram_addr = {5'b0000_0, crtc_col} +
+                           {char_row, 6'b00_0000} +
                            {2'b00, char_row, 4'b0000};
     
-    RAM_4K8_2K16 VideoRAM
+    // 4K x 8-bit dual-port video RAM
+    VRAM_BRAM
+        #(
+        .WIDTH(8),
+        .DEPTH(4096)
+        )
+        VideoRAM
         (
         .clka_i (clk_cpu_i),
         .ena_i  (vram_en_i),
@@ -189,80 +215,56 @@ module VGAController
         .addra_i(vram_addr_i),
         .dia_i  (vram_din_i),
         .doa_o  (vram_dout_o),
+        
         .clkb_i (clk_pixel_i),
-        .enb_i  (crtc_col_stb),
+        .enb_i  (crtc_new_col_stb),
         .addrb_i(vga2vram_addr),
         .dob_o  (vram2vga_data)
         );
     
     
-/* CHARACTER GENERATOR AND CHARACTER ROM **************************************/
+/* CHARACTER GENERATOR ********************************************************/
     
-    reg         chargen_en_stb_ff;  // enable strobe
-    reg  [3:0]  glyph_row_p1_reg;   // glyph row pipeline
-    wire        char2rom_rd_stb;    // character ROM read strobe
-    wire [11:0] char2rom_addr;      // character generator to ROM address
-    wire        chargen_pixel;      // pixel output
-    wire [7:0]  rom2char_data;      // character ROM to character generator data
+    reg        char_gen_we_ff;      // character generator write enable
+    reg  [3:0] glyph_row_reg;       // character glyph row
+    wire       char_gen_pixel;      // character generator pixel output
     
-    // character generator enable strobe... also matches delay from video RAM
-    initial chargen_en_stb_ff = 1'b0;
+    // character generator write enable... matches delay from video RAM access
+    initial char_gen_we_ff = 1'b0;
     always @(posedge clk_pixel_i)
-        chargen_en_stb_ff <= #1 crtc_col_stb;
+        char_gen_we_ff <= #1 crtc_new_col_stb;
     
-    // character glyph row pipeline... matches delay from video RAM access
-    initial glyph_row_p1_reg = 4'd0;
+    // character glyph row... matches delay from video RAM access
+    initial glyph_row_reg = 4'd0;
     always @(posedge clk_pixel_i)
-        glyph_row_p1_reg <= #1 crtc_line[3:0];
+        glyph_row_reg <= #1 crtc_line[3:0];
     
     CharacterGenerator CharacterGenerator
         (
         .clk_i      (clk_pixel_i),
-        .en_i       (chargen_en_stb_ff),
-        .glyph_row_i(glyph_row_p1_reg),
-        .ascii_i    (vram2vga_data[7:0]),
-        .rd_stb_o   (char2rom_rd_stb),
-        .addr_o     (char2rom_addr),
-        .din_i      (rom2char_data),
-        .pixel_o    (chargen_pixel)
-        );
-    
-    ROM_BRAM
-        #(
-        .WIDTH    (8),
-        .DEPTH    (4096),
-        .INIT_FILE("../../bram_data/font.hex")
-        )
-        CharacterROM
-        (
-        .clk_i (clk_pixel_i),
-        .en_i  (char2rom_rd_stb),
-        .addr_i(char2rom_addr),
-        .dout_o(rom2char_data)
+        .we_i       (char_gen_we_ff),
+        .ascii_i    (vram2vga_data),
+        .glyph_row_i(glyph_row_reg),
+        .pixel_o    (char_gen_pixel)
         );
     
     
 /* ATTRIBUTE DECODER **********************************************************/
     
-    reg         attr_en_stb_ff;     // enable strobe
-    reg  [7:0]  attr_p1_reg;        // text attribute pipeline
+    reg         attr_en_ff;         // attribute decoder enable
     wire [11:0] attr_fg_rgb;        // foreground RGB444 value
     wire [11:0] attr_bg_rgb;        // background RGB444 value
     
-    // text attribute pipeline and enable strobe... matches output delays to 
-    // character generator
-    initial attr_en_stb_ff = 1'b0;
-    initial attr_p1_reg    = 8'd0;
-    always @(posedge clk_pixel_i) begin
-        attr_en_stb_ff <= #1 chargen_en_stb_ff;
-        attr_p1_reg    <= #1 vram2vga_data[15:8];
-    end
+    // enable decoder enable... matches output delays to character generator
+    initial attr_en_ff = 1'b0;
+    always @(posedge clk_pixel_i)
+        attr_en_ff <= #1 char_gen_we_ff;
     
     AttributeDecoder AttributeDecoder
         (
         .clk_i   (clk_pixel_i),
-        .en_i    (attr_en_stb_ff),
-        .attr_i  (attr_p1_reg),
+        .en_i    (attr_en_ff),
+        .attr_i  (attrib_reg),
         .fg_rgb_o(attr_fg_rgb),
         .bg_rgb_o(attr_bg_rgb)
         );
@@ -285,7 +287,7 @@ module VGAController
         .hsync_i   (crtc_hsync),
         .vsync_i   (crtc_vsync),
         .video_on_i(crtc_video_on),
-        .pixel_i   (chargen_pixel),
+        .pixel_i   (char_gen_pixel),
         .fg_rgb_i  (attr_fg_rgb),
         .bg_rgb_i  (attr_bg_rgb),
         .cursor_i  (cursor_pixel),

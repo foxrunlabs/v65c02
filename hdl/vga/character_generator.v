@@ -35,49 +35,58 @@ Purpose : Character generator for the VGA text-mode controller module.
 
 module CharacterGenerator
     (
-    input wire         clk_i,       // pixel clock
-    input wire         en_i,        // enable strobe
+    input wire        clk_i,        // pixel clock
+    input wire        we_i,         // write enable signal
     
-    input wire  [3:0]  glyph_row_i, // character glyph row		
-    input wire  [7:0]  ascii_i,     // ASCII character code
+    input wire  [7:0] ascii_i,      // 8-bit ASCII character
+    input wire  [3:0] glyph_row_i,  // character glyph row
     
-    // character ROM signals
-    output wire        rd_stb_o,    // read strobe
-    output wire [11:0] addr_o,      // 12-bit address 
-    input wire  [7:0]  din_i,       // 8-bit data
-    
-    output wire        pixel_o      // pixel output
+    output wire       pixel_o       // pixel output
     );
     
     
-/* CHARACTER ROM SIGNALS ******************************************************/
+/* CHARACTER ROM **************************************************************/
     
-    assign rd_stb_o = en_i;
-    assign addr_o   = {ascii_i, glyph_row_i};
+    wire        char_rom_en;
+    wire [11:0] char_rom_addr;
+    wire [7:0]  char_rom_data;
+    
+    assign char_rom_en   = we_i;
+    assign char_rom_addr = {ascii_i, glyph_row_i};
+    
+    // 4K x 8-bit character ROM
+    ROM_BRAM
+        #(
+        .WIDTH    (8),
+        .DEPTH    (4096),
+        .INIT_FILE("font.hex")
+        )
+        CharacterROM
+        (
+        .clk_i (clk_i),
+        .en_i  (char_rom_en),
+        .addr_i(char_rom_addr),
+        .dout_o(char_rom_data)
+        );
     
     
-/* PIXEL GENERATOR ************************************************************/
+/* GLYPH PIXELS SHIFT REGISTER ************************************************/
     
-    reg        en_p1_ff;            // pipeline delay
-    reg  [8:0] glyph_pixels_reg;    // glyph pixels
-    wire       bit9;                // bit-9 pixel for character
+    reg       glyph_pixels_ld_ff;   // glyph pixels load signal
+    reg [7:0] glyph_pixels_reg;     // glyph pixels shift register
     
-    // enable strobe pipeline
-    initial en_p1_ff = 1'b0;
+    initial glyph_pixels_ld_ff = 1'b0;
     always @(posedge clk_i)
-        en_p1_ff <= #1 en_i;
-    
-    // extend the drawing characters to keep them continuous
-    assign bit9 = ((ascii_i >= 8'd192) & (ascii_i <  8'd223)) ? din_i[0] : 1'b0;
+        glyph_pixels_ld_ff <= #1 we_i;
     
     // glyph pixels shift register
-    initial glyph_pixels_reg = 9'd0;
+    initial glyph_pixels_reg = 8'd0;
     always @(posedge clk_i)
-        if(en_p1_ff)
-            glyph_pixels_reg <= #1 {din_i, bit9};
+        if(glyph_pixels_ld_ff)
+            glyph_pixels_reg <= #1 char_rom_data;
         else
-            glyph_pixels_reg <= #1 {glyph_pixels_reg[7:0], 1'b0};
+            glyph_pixels_reg <= #1 {glyph_pixels_reg[6:0], 1'b0};
     
-    assign pixel_o = glyph_pixels_reg[8];
+    assign pixel_o = glyph_pixels_reg[7];
     
 endmodule

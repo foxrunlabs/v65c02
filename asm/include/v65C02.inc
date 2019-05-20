@@ -54,28 +54,27 @@ RF = $0F
 ;- console routines ------------------------------------------------------------
 COL     = $10               ; current cursor column
 ROW     = $11               ; current cursor row
-ATTR    = $12               ; text attribute
-VRAM    = $13               ; video RAM pointer
-VRAML   = $13               ; video RAM pointer LSB
-VRAMH   = $14               ; video RAM pointer MSB
-STR     = $15               ; string pointer (puts routine)
-STRL    = $15               ; string pointer LSB
-STRH    = $16               ; string pointer MSB
-CURS    = $17               ; cursor address
-CURSL   = $17               ; cursor address LSB
-CURSH   = $18               ; cursor address MSB
-CURSTMP = $19               ; cursor temp (gotoxy routine)
-SCROLL  = $1A               ; next line video RAM pointer (scrolldn routine)
-SCROLLL = $1A               ; next line video RAM pointer LSB
-SCROLLH = $1B               ; next line video RAM pointer MSB
+VRAM    = $12               ; video RAM pointer
+VRAML   = $12               ; video RAM pointer LSB
+VRAMH   = $13               ; video RAM pointer MSB
+STR     = $14               ; string pointer (puts routine)
+STRL    = $14               ; string pointer LSB
+STRH    = $15               ; string pointer MSB
+CURS    = $16               ; cursor address
+CURSL   = $16               ; cursor address LSB
+CURSH   = $17               ; cursor address MSB
+CURSTMP = $18               ; cursor temp (gotoxy routine)
+SCROLL  = $19               ; next line video RAM pointer (scrolldn routine)
+SCROLLL = $19               ; next line video RAM pointer LSB
+SCROLLH = $1A               ; next line video RAM pointer MSB
 
 ;- call table address ----------------------------------------------------------
-BIOSTL  = $1C               ; call table (LSB) pointer
-BIOSTLL = $1C               ; call table (LSB) pointer LSB
-BIOSTLH = $1D               ; call table (LSB) pointer MSB
-BIOSTH  = $1E               ; call table (MSB) pointer
-BIOSTHL = $1E               ; call table (MSB) pointer LSB
-BIOSTHH = $1F               ; call table (MSB) pointer MSB
+BIOSTL  = $1b               ; call table (LSB) pointer
+BIOSTLL = $1B               ; call table (LSB) pointer LSB
+BIOSTLH = $1C               ; call table (LSB) pointer MSB
+BIOSTH  = $1D               ; call table (MSB) pointer
+BIOSTHL = $1D               ; call table (MSB) pointer LSB
+BIOSTHH = $1E               ; call table (MSB) pointer MSB
 
 
 ;= ROM MONITOR =================================================================
@@ -164,14 +163,17 @@ WHITE         = $0F
 
 ;= DEVICE MEMORY MAP ===========================================================
 
+IO          = $AF00
+
 ;- device 0 --------------------------------------------------------------------
-VGA         = $BFA0
+VGA         = IO + 0
 VGA_STATUS  = VGA + 0
 VGA_CURSL   = VGA + 1
 VGA_CURSH   = VGA + 2
+VGA_ATTRIB  = VGA + 3
 
 ;- device 1 --------------------------------------------------------------------
-SSEG        = $BFA8
+SSEG        = IO + $10
 SSEG_DIGITS = SSEG + 0
 SSEG_DP     = SSEG + 1
 SSEG_BYTE0  = SSEG + 2
@@ -180,7 +182,7 @@ SSEG_BYTE2  = SSEG + 4
 SSEG_BYTE3  = SSEG + 5
 
 ;- device 2 --------------------------------------------------------------------
-UART        = $BFB0
+UART        = IO + $20
 UART_STATUS = UART + 0
 UART_BRGL   = UART + 1
 UART_BRGH   = UART + 2
@@ -188,12 +190,12 @@ UART_TXREG  = UART + 3
 UART_RXREG  = UART + 4
 
 ;- device 3 --------------------------------------------------------------------
-KBD         = $BFB8
+KBD         = IO + $30
 KBD_STATUS  = KBD + 0
 KBD_DATA    = KBD + 1
 
 ;- device 4 --------------------------------------------------------------------
-TMR         = $BFC0
+TMR         = IO + $40
 TMR_STATUS  = TMR + 0
 TMR_TIMER08 = TMR + 1
 TMR_TIMER16 = TMR + 2
@@ -201,25 +203,37 @@ TMR_TIMER24 = TMR + 3
 TMR_TIMER32 = TMR + 4
 
 ;- device 5 --------------------------------------------------------------------
-DEVICE5     = $BFC8
+DEVICE5     = IO + $50
 
 ;- device 6 --------------------------------------------------------------------
-DEVICE6     = $BFD0
+DEVICE6     = IO + $60
 
 ;- device 7 --------------------------------------------------------------------
-DEVICE7     = $BFD8
+DEVICE7     = IO + $70
 
 ;- device 8 --------------------------------------------------------------------
-DEVICE8     = $BFE0
+DEVICE8     = IO + $80
 
 ;- device 9 --------------------------------------------------------------------
-DEVICE9     = $BFE8
+DEVICE9     = IO + $90
 
 ;- device 10 -------------------------------------------------------------------
-DEVICE10    = $BFF0
+DEVICE10    = IO + $A0
 
 ;- device 11 -------------------------------------------------------------------
-DEVICE11    = $BFF8
+DEVICE11    = IO + $B0
+
+;- device 12 -------------------------------------------------------------------
+DEVICE12    = IO + $C0
+
+;- device 13 -------------------------------------------------------------------
+DEVICE13    = IO + $D0
+
+;- device 14 -------------------------------------------------------------------
+DEVICE14    = IO + $E0
+
+;- device 15 -------------------------------------------------------------------
+DEVICE15    = IO + $F0
 
 
 ;= DEVICE REGISTERS ============================================================

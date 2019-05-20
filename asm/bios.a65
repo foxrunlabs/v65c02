@@ -39,7 +39,7 @@
 
 .DEFINE     VERSION .CONCAT("v65C02 BIOS v", "1.0.0")
 
-            ATTRIB = (BLACK << 4) | LIGHT_GRAY      ; light gray on black text
+            ATTRIB = (BLUE << 4) | YELLOW       ; yellow on blue text
 
 
 ;===============================================================================
@@ -52,26 +52,24 @@
 
 bios:       stz     VGA_STATUS          ; disable VGA and cursor
             
-            lda     #.HIBYTE(__VRAM_START__ + __VRAM_SIZE__ - 1)
+            lda     #ATTRIB             ; A = default screen attribute
+            sta     VGA_ATTRIB          ; store attribute to ATTRIB register
+            
+            lda     #.HIBYTE(__VRAM_START__)
             sta     VRAMH
-            lda     #.LOBYTE(__VRAM_START__ + __VRAM_SIZE__ - 1)
-            sta     VRAML               ; (VRAM) = VRAM end address
+            lda     #.LOBYTE(__VRAM_START__)
+            sta     VRAML               ; (VRAM) = VRAM start address
             
-            ;- clear VRAM with default attribute -------------------------------
-@clrscr:    lda     #ATTRIB             ; A = default text attribute
-            sta     (VRAM)              ; store attribute to VRAM
-            dec     VRAML               ; decrement VRAM address LSB
-            lda     #NUL                ; A = NUL
+            ;- clear VRAM ------------------------------------------------------
+@clrscr:    lda     #NUL                ; A = NUL
             sta     (VRAM)              ; store NUL to VRAM
-            dec     VRAML               ; decrement VRAM address LSB
-            lda     VRAML               ; A = VRAM address LSB
-            cmp     #$FF                ; VRAML roll over to $FF?
-            bne     @clrscr             ; no, loop
+            inc     VRAML               ; increment VRAM address LSB
+            bne     @clrscr             ; roll over to $00? no, loop
             
-            dec     VRAMH               ; decrement VRAM address MSB
+            inc     VRAMH               ; increment VRAM address MSB
             lda     VRAMH               ; A = VRAM address MSB
-            cmp     #.HIBYTE(__VRAM_START__ - 1)
-            bne     @clrscr             ; VRAM address MSB >= start? loop
+            cmp     #.HIBYTE(__VRAM_START__ + __VRAM_SIZE__)
+            bne     @clrscr             ; equal to VRAM upper limit? no, loop
             
             stz     VGA_CURSH
             stz     VGA_CURSL           ; set cursor to (0,0)
@@ -81,9 +79,6 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     #VGA_EN             ; VGA enabled, cursor disabled
             sta     VGA_STATUS          ; write new status register
             
-            lda     #ATTRIB             ; A = default text attribute
-            sta     ATTR                ; save in ATTR
-
             ;- SSEG initialization ---------------------------------------------
             stz     SSEG_DIGITS
             stz     SSEG_DP
@@ -174,11 +169,11 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
 @lf:        ldx     #0                  ; column = 0
             lda     ROW                 ; A = row
             inc     A                   ; row++
-            cmp     #25
-            bne     @setcurs            ; 25? nope
+            cmp     #30
+            bne     @setcurs            ; 30? nope
             
             jsr     scrolldn            ; scroll display
-            lda     #24                 ; row = 24
+            lda     #29                 ; row = 29
             bra     @setcurs
                         
             ;- process HT ----------_-------------------------------------------
@@ -206,19 +201,13 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             ;- write character to screen ---------------------------------------
 @print:     tax                         ; save character
             
-            lda     VGA_CURSH
-            sta     VRAMH
             lda     VGA_CURSL
-            sta     VRAML               ; (VRAM) = 11-bit cursor address
-            
-            asl     VRAML               ; 12-bit VRAM addr = cursor addr << 1
-            rol     VRAMH
-            lda     VRAMH
+            sta     VRAML               ; (VRAM) = 12-bit cursor address
+            lda     VGA_CURSH
             ora     #.HIBYTE(__VRAM_START__)
             sta     VRAMH               ; (VRAM) = 16-bit VRAM address
             
             txa                         ; restore character
-            
             sta     (VRAM)              ; write character to screen
             
             ldx     COL                 ; X = current column
@@ -335,9 +324,9 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             lda     #.LOBYTE(__VRAM_START__)
             sta     VRAML               ; (VRAM) = address of (0,0)
             
-            lda     #.HIBYTE(__VRAM_START__ + 160)
+            lda     #.HIBYTE(__VRAM_START__ + 80)
             sta     SCROLLH
-            lda     #.LOBYTE(__VRAM_START__ + 160)
+            lda     #.LOBYTE(__VRAM_START__ + 80)
             sta     SCROLLL             ; (SCROLL) = address of (0,1)
             
 @loop0:     lda     (SCROLL)            ; save character from line below
@@ -351,23 +340,20 @@ bios:       stz     VGA_STATUS          ; disable VGA and cursor
             bne     @bounds             ; SCROLLL++ rollover to 00? nope
             inc     SCROLLH             ; yes, SCROLLH++
             
-            ;- bounds check (SCROLL) against video RAM end ---------------------            
+            ;- bounds check (SCROLL) against screen end ------------------------            
 @bounds:    lda     SCROLLH
-            cmp     #.HIBYTE(__VRAM_START__ + __VRAM_SIZE__)
+            cmp     #.HIBYTE(__VRAM_START__ + (80 * 30))
             bne     @loop0
             lda     SCROLLL
-            cmp     #.LOBYTE(__VRAM_START__ + __VRAM_SIZE__)
+            cmp     #.LOBYTE(__VRAM_START__ + (80 * 30))
             bne     @loop0
             
             ;- clear bottom line -----------------------------------------------
 @loop1:     lda     #NUL
             sta     (VRAM)
             inc     VRAML
-            lda     #ATTRIB
-            sta     (VRAM)
-            inc     VRAML
             lda     VRAML
-            cmp     #.LOBYTE(__VRAM_START__ + __VRAM_SIZE__)
+            cmp     #.LOBYTE(__VRAM_START__ + (80 * 30))
             bne     @loop1    
             
             rts
@@ -494,7 +480,7 @@ bios_tbl_h: .BYTE .HIBYTE(softrst-1)
 ;= STRINGS =====================================================================
 
 biosver:    .BYTE VERSION, LF, NUL
-copyright:  .BYTE "Copyright (C) 2018 Ryan Clarke", LF, NUL
+copyright:  .BYTE "Copyright (C) 2018-2019 Ryan Clarke", LF, NUL
 nodisk:     .BYTE "SD card not found.", LF, NUL
 loading:    .BYTE "Loading ROM monitor.", LF, NUL
 
