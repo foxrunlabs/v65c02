@@ -158,7 +158,9 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
 
 
 ;= #1 PUTCH ====================================================================
-; Prints a character to the screen. Updates the cursor position after printing.
+; Prints a character to the screen at the current cursor position. Updates the
+; cursor position after printing. Line feed, backspace, and tab are treated as
+; commands.
 ;
 ; Parameters: A = character
 ; Returns:    none
@@ -170,48 +172,48 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
 .proc putch
             
             cmp     #LF
-            beq     @lf                 ; line feed? process
+            beq     lf                  ; line feed? process
             cmp     #HT
-            beq     @ht                 ; horizontal tab? process
+            beq     ht                  ; horizontal tab? process
             cmp     #BS
-            beq     @bs                 ; backspace? process
-            bra     @print              ; print character
+            beq     bs                  ; backspace? process
+            bra     print               ; print character
             
             ;- process LF ------------------------------------------------------
-@lf:        ldx     #0                  ; column = 0
+lf:         ldx     #0                  ; column = 0
             lda     ROW                 ; A = row
             inc     A                   ; row++
             cmp     #NUMROWS
-            bne     @setcurs            ; NUMROWS? nope
+            bne     setcurs             ; NUMROWS? nope
             
             jsr     scrolldn            ; scroll display
             lda     #(NUMROWS - 1)      ; row = NUMROWS - 1
-            bra     @setcurs
+            bra     setcurs
                         
             ;- process HT ----------_-------------------------------------------
-@ht:        lda     COL                 ; A = column
+ht:         lda     COL                 ; A = column
             cmp     #(NUMCOLS - 8)
-            bcs     @lf                 ; column >= NUMROWS - 8? new line
+            bcs     lf                  ; column >= NUMROWS - 8? new line
             
             and     #%11111000          ; clear lower three bits of column
             adc     #8                  ; advance to next tab stop (carry clear)
             tax                         ; X = new column
             lda     ROW
-            bra     @setcurs
+            bra     setcurs
             
             ;- process BS --------------_---------------------------------------
-@bs:        lda     ROW                 ; A = row
+bs:         lda     ROW                 ; A = row
             ldx     COL                 ; X = column
             dex                         ; column--
-            bpl     @setcurs            ; bit 7 set? nope, set cursor
+            bpl     setcurs             ; bit 7 set? nope, set cursor
             
             ldx     #(NUMCOLS - 1)      ; column = 79
             dec     A                   ; row--
-            bmi     @exit               ; negative? do nothing
-            bra     @setcurs            ; set cursor
+            bmi     exit                ; negative? do nothing
+            bra     setcurs             ; set cursor
             
             ;- write character to screen ---------------------------------------
-@print:     tax                         ; save character
+print:      tax                         ; save character
             
             lda     VGA_CURSL
             sta     VRAML               ; (VRAM) = 12-bit cursor address
@@ -236,14 +238,14 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
             
             ldx     COL                 ; X = current column
             cpx     #(NUMCOLS - 1)
-            beq     @lf                 ; column == 79? new line
+            beq     lf                  ; column == 79? new line
 
             inx                         ; column++
             lda     ROW                 ; A = current row
             
-@setcurs:   jsr     gotoxy              ; update cursor position
+setcurs:    jsr     gotoxy              ; update cursor position
             
-@exit:      rts
+exit:       rts
 
 .endproc
 
@@ -508,19 +510,21 @@ irq:        pha                         ; save A
 ; 3 - Set cursor position
 ; 4 - Scroll screen down one line
 
-bios_tbl_l: .BYTE .LOBYTE(softrst-1)
-            .BYTE .LOBYTE(putch-1)
-            .BYTE .LOBYTE(puts-1)
-            .BYTE .LOBYTE(gotoxy-1)
-            .BYTE .LOBYTE(scrolldn-1)
-            .BYTE .LOBYTE(getkey-1)
+bios_tbl_l: .BYTE .LOBYTE(softrst - 1)
+            .BYTE .LOBYTE(putch - 1)
+            .BYTE .LOBYTE(puts - 1)
+            .BYTE .LOBYTE(gotoxy - 1)
+            .BYTE .LOBYTE(scrolldn - 1)
+            .BYTE .LOBYTE(getkey - 1)
+            .BYTE .LOBYTE(putch::print - 1)
 
-bios_tbl_h: .BYTE .HIBYTE(softrst-1)
-            .BYTE .HIBYTE(putch-1)
-            .BYTE .HIBYTE(puts-1)
-            .BYTE .HIBYTE(gotoxy-1)
-            .BYTE .HIBYTE(scrolldn-1)
-            .BYTE .HIBYTE(getkey-1)
+bios_tbl_h: .BYTE .HIBYTE(softrst - 1)
+            .BYTE .HIBYTE(putch - 1)
+            .BYTE .HIBYTE(puts - 1)
+            .BYTE .HIBYTE(gotoxy - 1)
+            .BYTE .HIBYTE(scrolldn - 1)
+            .BYTE .HIBYTE(getkey - 1)
+            .BYTE .HIBYTE(putch::print - 1)
 
 
 ;= STRINGS =====================================================================

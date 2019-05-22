@@ -15,29 +15,66 @@
 #===============================================================================
 
 #===============================================================================
-# File Name : memory.conf
+# File Name : makefile
 # Project   : v65C02 8-bit Computer
 # Author    : Ryan Clarke
 # E-mail    : kj6msg@icloud.com
 #===============================================================================
-# Purpose : Linker configuration file for the v65C02 8-bit Computer user program
+# Purpose : Makefile for the v65C02 8-bit Computer BIOS
 #===============================================================================
 
 
-MEMORY
-    {
-    RAM:
-        start   = $0300,
-        size    = $AC00;
-    }
+SHELL = /bin/sh
 
-SEGMENTS
-    {
-    CODE:
-        load = RAM,
-        type = rw;
-    
-    RODATA:
-        load = RAM,
-        type = ro;
-    }
+.SUFFIXES:
+.SUFFIXES: .a65 .o
+
+prefix  = ..
+srcdir  = ./src
+bramdir = $(prefix)/bram_data
+hexdir  = $(prefix)/hdl/memory
+
+VPATH = $(srcdir)
+
+TARGET = bios.rom
+MEM    = bios.mem
+HEX    = bios.hex
+OBJS   = bios.o monitor.o
+
+AS       = ca65
+ASFLAGS  = --cpu 65C02 -l $(basename $@).lst -t none -I ./include
+
+LD       = ld65
+LDCONFIG = memory.conf
+LDFLAGS  = -C $(LDCONFIG) -m $(basename $@).map
+
+BIN2MEM  = ./bin2mem.sh
+BIN2HEX  = ./bin2hex.sh
+
+.PHONY: all
+all : $(TARGET)
+
+%.o : %.a65
+	$(AS) $(ASFLAGS) -o $@ $<
+
+$(TARGET) : $(OBJS)
+	$(LD) $(LDFLAGS) -o $@ $^
+	$(BIN2MEM) $@
+	$(BIN2HEX) $@
+
+.PHONY: install
+install : all
+	@cp -v $(MEM) $(bramdir)
+	@cp -v $(HEX) $(hexdir)
+
+.PHONY: clean
+clean :
+	@rm -fv *.lst
+	@rm -fv *.map
+	@rm -fv *.o
+
+.PHONY: distclean
+distclean : clean
+	@rm -fv $(TARGET)
+	@rm -fv $(MEM)
+	@rm -fv $(HEX)
