@@ -85,24 +85,24 @@ module v65C02_Top
         );
     
     
-/* v65C02 CPU *****************************************************************/
+/* 65C02 CPU ******************************************************************/
     
     wire [15:0] cpu_addr;               // v65C02 16-bit address bus
     reg  [7:0]  cpu_din;                // v65C02 8-bit data input
     wire [7:0]  cpu_dout;               // v65C02 8-bit data output
     wire        cpu_we;                 // v65C02 write enable
     
-    cpu_65c02 CPU
+    v65C02 CPU
         (
-        .clk  (clk_cpu),
-        .reset(rst_cpu),
-        .AB   (cpu_addr),
-        .DI   (cpu_din),
-        .DO   (cpu_dout),
-        .WE   (cpu_we),
-        .IRQ  (1'b0),
-        .NMI  (1'b0),
-        .RDY  (1'b1)
+        .CLK_i(clk_cpu),
+        .RST_i(rst_cpu),
+        .AB_o (cpu_addr),
+        .DB_i (cpu_din),
+        .DB_o (cpu_dout),
+        .WE_o (cpu_we),
+        .IRQ_i(1'b0),
+        .NMI_i(1'b0),
+        .RDY_i(1'b1)
         );
     
     
