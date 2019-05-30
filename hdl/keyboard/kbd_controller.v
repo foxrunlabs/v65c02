@@ -32,15 +32,15 @@ Purpose : PS/2 keyboard controller for the v65C02 8-bit Computer.
 
 module KeyboardController
     (
-    input  wire       clk_i,        // CPU clock
+    input  wire       i_clk,        // CPU clock
     
-    input  wire       en_i,         // controller bus select
+    input  wire       i_en,         // controller bus select
     
-    input  wire       regsel_i,     // 1-bit register select
-    output wire [7:0] dout_o,       // 8-bit register data output
+    input  wire       i_reg_sel,    // 1-bit register select
+    output wire [7:0] o_data,       // 8-bit register data output
     
-    inout  wire       ps2_clk_io,   // PS/2 clock
-    inout  wire       ps2_data_io   // PS/2 serial data
+    inout  wire       io_ps2_clk,   // PS/2 clock
+    inout  wire       io_ps2_data   // PS/2 serial data
     );
     
     
@@ -53,22 +53,22 @@ module KeyboardController
     
     // read logic
     initial dout_reg = 8'h00;
-    always @(posedge clk_i)
-        if(en_i)
-            case(regsel_i)
+    always @(posedge i_clk)
+        if(i_en)
+            case(i_reg_sel)
                 STATUS:  dout_reg <= #1 {7'b0000_000, data_full_ff};
                 DATA:    dout_reg <= #1 data_reg;
                 default: dout_reg <= #1 8'h00;
             endcase
     
     // output logic
-    assign dout_o = dout_reg;
+    assign o_data = dout_reg;
     
     
 /* PS/2 CLOCK AND DATA OUTPUT *************************************************/
     
-    assign ps2_clk_io  = (data_full_ff) ? 1'b0 : 1'bZ;  // suppress if DATA full
-    assign ps2_data_io = 1'bZ;                          // always receiving
+    assign io_ps2_clk  = (data_full_ff) ? 1'b0 : 1'bZ;  // suppress if DATA full
+    assign io_ps2_data = 1'bZ;                          // always receiving
     
     
 /* PS/2 CLOCK INPUT SYNCHRONIZER AND FALLING EDGE DETECTOR ********************/
@@ -82,8 +82,8 @@ module KeyboardController
     initial ps2_clkin_async_ff     = 1'b1;
     initial ps2_clkin_sync_ff      = 1'b1;
     initial ps2_clkin_sync_prev_ff = 1'b1;
-    always @(posedge clk_i) begin
-        ps2_clkin_async_ff     <= #1 ps2_clk_io;
+    always @(posedge i_clk) begin
+        ps2_clkin_async_ff     <= #1 io_ps2_clk;
         ps2_clkin_sync_ff      <= #1 ps2_clkin_async_ff;
         ps2_clkin_sync_prev_ff <= #1 ps2_clkin_sync_ff;
     end
@@ -100,8 +100,8 @@ module KeyboardController
     // PS/2 data input synchronizer
     initial ps2_din_async_ff = 1'b1;
     initial ps2_din_sync_ff  = 1'b1;
-    always @(posedge clk_i) begin
-        ps2_din_async_ff <= #1 ps2_data_io;
+    always @(posedge i_clk) begin
+        ps2_din_async_ff <= #1 io_ps2_data;
         ps2_din_sync_ff  <= #1 ps2_din_async_ff;
     end
     
@@ -118,13 +118,13 @@ module KeyboardController
     
     PS2_RX PS2_RX
         (
-        .clk_i           (clk_i),
-        .en_i            (rx_en),
-        .ps2_clk_fe_stb_i(ps2_clkin_fe_stb),
-        .ps2_din_i       (ps2_din_sync_ff),
-        .rx_stb_o        (rx_stb),
-        .dout_o          (rx_dout),
-        .parity_err_o    (rx_parity_err)
+        .i_clk           (i_clk),
+        .i_en            (rx_en),
+        .i_ps2_clk_fe_stb(ps2_clkin_fe_stb),
+        .i_ps2_data      (ps2_din_sync_ff),
+        .o_rx_stb        (rx_stb),
+        .o_data          (rx_dout),
+        .o_parity_err    (rx_parity_err)
         );
     
     
@@ -139,11 +139,11 @@ module KeyboardController
     
     PS2toASCII PS2toASCII
         (
-        .clk_i     (clk_i),
-        .en_i      (scancode_valid),
-        .scancode_i(rx_dout),
-        .rdy_stb_o (ascii_valid),
-        .ascii_o   (ascii)
+        .i_clk     (i_clk),
+        .i_en      (scancode_valid),
+        .i_scancode(rx_dout),
+        .o_rdy_stb (ascii_valid),
+        .o_ascii   (ascii)
         );
     
     
@@ -152,7 +152,7 @@ module KeyboardController
     reg [7:0] data_reg;         // 8-bit data register
     
     initial data_reg = 8'h00;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(ascii_valid)
             data_reg <= #1 ascii;
     
@@ -162,11 +162,11 @@ module KeyboardController
     wire data_rd;               // CPU reading DATA register
     reg  data_full_ff;          // DATAFULL bit of STATUS register
     
-    assign data_rd = en_i & (regsel_i == DATA);
+    assign data_rd = i_en & (i_reg_sel == DATA);
     
     // set if data register full, clear if data register read by CPU
     initial data_full_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(ascii_valid)
             data_full_ff <= #1 1'b1;
         else

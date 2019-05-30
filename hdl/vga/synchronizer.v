@@ -40,22 +40,22 @@ Purpose : Synchronizer for the VGA text-mode controller module.
 
 module Synchronizer
     (
-    input wire         clk_i,       // pixel clock
-    input wire         en_i,        // output enable
+    input wire         i_clk,       // pixel clock
+    input wire         i_en,        // output enable
     
-    input wire         hsync_i,     // horizontal sync from CRTC
-    input wire         vsync_i,     // vertical sync from CRTC
-    input wire         video_on_i,  // active video flag from CRTC
+    input wire         i_hsync,     // horizontal sync from CRTC
+    input wire         i_vsync,     // vertical sync from CRTC
+    input wire         i_video_on,  // active video flag from CRTC
     
-    input wire         pixel_i,     // character generator pixel 
-    input wire         cursor_i,    // cursor pixel
+    input wire         i_pixel,     // character generator pixel 
+    input wire         i_cursor,    // cursor pixel
     
-    input wire  [11:0] fg_rgb_i,    // foreground RGB444 from attribute decoder
-    input wire  [11:0] bg_rgb_i,    // background RGB444 from attribute decoder
+    input wire  [11:0] i_fg_rgb,    // foreground RGB444 from attribute decoder
+    input wire  [11:0] i_bg_rgb,    // background RGB444 from attribute decoder
     
-    output wire [11:0] rgb_o,       // RGB444 output
-    output wire        hsync_o,     // horizontal sync output
-    output wire        vsync_o      // vertical sync output
+    output wire [11:0] o_rgb,       // RGB444 output
+    output wire        o_hsync,     // horizontal sync output
+    output wire        o_vsync      // vertical sync output
     );
     
     
@@ -85,8 +85,8 @@ module Synchronizer
     initial hsync_p1_ff = 1'b0;
     initial hsync_p2_ff = 1'b0;
     initial hsync_p3_ff = 1'b0;
-    always @(posedge clk_i) begin
-        hsync_p1_ff <= #1 hsync_i;
+    always @(posedge i_clk) begin
+        hsync_p1_ff <= #1 i_hsync;
         hsync_p2_ff <= #1 hsync_p1_ff;
         hsync_p3_ff <= #1 hsync_p2_ff;
     end
@@ -95,8 +95,8 @@ module Synchronizer
     initial vsync_p1_ff = 1'b0;
     initial vsync_p2_ff = 1'b0;
     initial vsync_p3_ff = 1'b0;
-    always @(posedge clk_i) begin
-        vsync_p1_ff <= #1 vsync_i;
+    always @(posedge i_clk) begin
+        vsync_p1_ff <= #1 i_vsync;
         vsync_p2_ff <= #1 vsync_p1_ff;
         vsync_p3_ff <= #1 vsync_p2_ff;
     end
@@ -105,8 +105,8 @@ module Synchronizer
     initial video_on_p1_ff = 1'b0;
     initial video_on_p2_ff = 1'b0;
     initial video_on_p3_ff = 1'b0;
-    always @(posedge clk_i) begin
-        video_on_p1_ff <= #1 video_on_i;
+    always @(posedge i_clk) begin
+        video_on_p1_ff <= #1 i_video_on;
         video_on_p2_ff <= #1 video_on_p1_ff;
         video_on_p3_ff <= #1 video_on_p2_ff;
     end
@@ -115,8 +115,8 @@ module Synchronizer
     initial cursor_p1_ff = 1'b0;
     initial cursor_p2_ff = 1'b0;
     initial cursor_p3_ff = 1'b0;
-    always @(posedge clk_i) begin
-        cursor_p1_ff <= #1 cursor_i;
+    always @(posedge i_clk) begin
+        cursor_p1_ff <= #1 i_cursor;
         cursor_p2_ff <= #1 cursor_p1_ff;
         cursor_p3_ff <= #1 cursor_p2_ff;
     end
@@ -133,30 +133,30 @@ module Synchronizer
     
     // multiplex the character and cursor pixel with the foreground and
     // background RGB444 values    
-    assign rgb_mux = (cursor_p3_ff | pixel_i) ? fg_rgb_i
-                                              : bg_rgb_i;
+    assign rgb_mux = (cursor_p3_ff | i_pixel) ? i_fg_rgb
+                                              : i_bg_rgb;
     
     // RGB444 output
     initial rgb_reg = 12'h000;
-    always @(posedge clk_i)
-        if(en_i & video_on_p3_ff)
+    always @(posedge i_clk)
+        if(i_en & video_on_p3_ff)
             rgb_reg <= #1 rgb_mux;
         else
             rgb_reg <= #1 COLOR_BLACK;
     
     // output logic
-    assign rgb_o   = rgb_reg;
+    assign o_rgb   = rgb_reg;
     
     // horizontal and vertical sync signals
     initial hsync_p4_ff = 1'b0;
     initial vsync_p4_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         hsync_p4_ff <= #1 hsync_p3_ff;
         vsync_p4_ff <= #1 vsync_p3_ff;
     end
     
     // output logic
-    assign hsync_o = hsync_p4_ff;
-    assign vsync_o = vsync_p4_ff;
+    assign o_hsync = hsync_p4_ff;
+    assign o_vsync = vsync_p4_ff;
     
 endmodule

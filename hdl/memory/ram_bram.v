@@ -33,14 +33,14 @@ module RAM_BRAM
               DEPTH = 4096
     )
     (
-    input wire                       clk_i,     // system clock
+    input wire                       i_clk,     // system clock
     
-    input wire                       en_i,      // enable
-    input wire                       we_i,      // write enable
+    input wire                       i_en,      // enable
+    input wire                       i_we,      // write enable
     
-    input wire [clogb2(DEPTH) - 1:0] addr_i,    // log2(DEPTH)-bit address
-    input wire [(WIDTH - 1):0]       din_i,     // WIDTH-bit data input
-    output reg [(WIDTH - 1):0]       dout_o     // WIDTH-bit data outut
+    input wire [clogb2(DEPTH) - 1:0] i_addr,    // log2(DEPTH)-bit address
+    input wire [(WIDTH - 1):0]       i_data,    // WIDTH-bit data input
+    output reg [(WIDTH - 1):0]       o_data     // WIDTH-bit data outut
     );
     
     
@@ -58,13 +58,13 @@ module RAM_BRAM
     endgenerate
     
     // output register (no change)
-    initial dout_o = 8'h00;
-    always @(posedge clk_i)
-        if(en_i) begin
-            if(we_i)
-                ram_reg[addr_i] <= #1 din_i;
+    initial o_data = 8'h00;
+    always @(posedge i_clk)
+        if(i_en) begin
+            if(i_we)
+                ram_reg[i_addr] <= #1 i_data;
             else
-                dout_o <= #1 ram_reg[addr_i];
+                o_data <= #1 ram_reg[i_addr];
         end
     
     

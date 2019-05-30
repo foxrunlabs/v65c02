@@ -83,27 +83,27 @@ Purpose : VGA text-mode controller for the v65C02 8-bit Computer on the
 
 module VGAController
     (
-    input  wire        clk_cpu_i,   // CPU clock
-    input  wire        clk_pixel_i, // pixel clock
+    input  wire        i_clk_cpu,   // CPU clock
+    input  wire        i_clk_pixel, // pixel clock
     
     // video RAM
-    input  wire        vram_en_i,   // video RAM enable
-    input  wire        vram_we_i,   // video RAM write enable
-    input  wire [11:0] vram_addr_i, // 12-bit video RAM address
-    input  wire [7:0]  vram_din_i,  // 8-bit video RAM data input
-    output wire [7:0]  vram_dout_o, // 8-bit video RAM data output
+    input  wire        i_vram_en,   // video RAM enable
+    input  wire        i_vram_we,   // video RAM write enable
+    input  wire [11:0] i_vram_addr, // 12-bit video RAM address
+    input  wire [7:0]  i_vram_din,  // 8-bit video RAM data input
+    output wire [7:0]  o_vram_dout, // 8-bit video RAM data output
     
     // registers
-    input  wire        reg_en_i,    // registers enable
-    input  wire        reg_we_i,    // registers write enable
-    input  wire [1:0]  regsel_i,    // 2-bit register select
-    input  wire [7:0]  reg_din_i,   // 8-bit register data input
-    output reg  [7:0]  reg_dout_o,  // 8-bit register data output
+    input  wire        i_reg_en,    // registers enable
+    input  wire        i_reg_we,    // registers write enable
+    input  wire [1:0]  i_reg_sel,    // 2-bit register select
+    input  wire [7:0]  i_reg_din,   // 8-bit register data input
+    output reg  [7:0]  o_reg_dout,  // 8-bit register data output
     
     // outputs
-    output wire [11:0] rgb_o,       // RGB444 output
-    output wire        hsync_o,     // horizontal sync
-    output wire        vsync_o      // vertical sync
+    output wire [11:0] o_rgb,       // RGB444 output
+    output wire        o_hsync,     // horizontal sync
+    output wire        o_vsync      // vertical sync
     );
     
     
@@ -124,24 +124,24 @@ module VGAController
     initial status_reg = 3'b000;    // display page, cursor off, output off
     initial cursl_reg  = 8'd0;      // cursor at (0,0)
     initial cursh_reg  = 4'h0;
-    always @(posedge clk_cpu_i)
-        if(reg_en_i)
-            if(reg_we_i)
-                case(regsel_i)
-                    R_STATUS: status_reg <= #1 reg_din_i[2:0];
-                    R_CURSL:  cursl_reg  <= #1 reg_din_i;
-                    R_CURSH:  cursh_reg  <= #1 reg_din_i[3:0];
+    always @(posedge i_clk_cpu)
+        if(i_reg_en)
+            if(i_reg_we)
+                case(i_reg_sel)
+                    R_STATUS: status_reg <= #1 i_reg_din[2:0];
+                    R_CURSL:  cursl_reg  <= #1 i_reg_din;
+                    R_CURSH:  cursh_reg  <= #1 i_reg_din[3:0];
                 endcase
     
     // control registers output
-    initial reg_dout_o = 8'h00;
-    always @(posedge clk_cpu_i)
-        if(reg_en_i)
-            case(regsel_i)
-                R_STATUS: reg_dout_o <= #1 {5'b0000_0, status_reg};
-                R_CURSL:  reg_dout_o <= #1 cursl_reg;
-                R_CURSH:  reg_dout_o <= #1 {4'b0000, cursh_reg};
-                default:  reg_dout_o <= #1 8'd0;
+    initial o_reg_dout = 8'h00;
+    always @(posedge i_clk_cpu)
+        if(i_reg_en)
+            case(i_reg_sel)
+                R_STATUS: o_reg_dout <= #1 {5'b0000_0, status_reg};
+                R_CURSL:  o_reg_dout <= #1 cursl_reg;
+                R_CURSH:  o_reg_dout <= #1 {4'b0000, cursh_reg};
+                default:  o_reg_dout <= #1 8'd0;
             endcase
     
     
@@ -171,14 +171,14 @@ module VGAController
         )
         CRTC
         (
-        .clk_i        (clk_pixel_i),
-        .new_col_stb_o(crtc_new_col_stb),
-        .col_o        (crtc_col),
-        .line_o       (crtc_line),
-        .hsync_o      (crtc_hsync),
-        .vsync_o      (crtc_vsync),
-        .cursor_o     (crtc_cursor),
-        .video_on_o   (crtc_video_on)
+        .i_clk        (i_clk_pixel),
+        .o_new_col_stb(crtc_new_col_stb),
+        .o_col        (crtc_col),
+        .o_line       (crtc_line),
+        .o_hsync      (crtc_hsync),
+        .o_vsync      (crtc_vsync),
+        .o_cursor     (crtc_cursor),
+        .o_video_on   (crtc_video_on)
         );
     
     
@@ -194,8 +194,8 @@ module VGAController
     wire [7:0]  attribute_data;     // attribute RAM to VGA controller data
     
     // display and attribute RAM enables
-    assign display_ram_en   = vram_en_i & (~status_reg[2]);
-    assign attribute_ram_en = vram_en_i & status_reg[2];
+    assign display_ram_en   = i_vram_en & (~status_reg[2]);
+    assign attribute_ram_en = i_vram_en & status_reg[2];
     
     // character row equals scan line mod 16
     assign char_row = crtc_line[9:4];
@@ -213,14 +213,14 @@ module VGAController
         )
         DisplayRAM
         (
-        .clka_i (clk_cpu_i),
+        .clka_i (i_clk_cpu),
         .ena_i  (display_ram_en),
-        .wea_i  (vram_we_i),
-        .addra_i(vram_addr_i),
-        .dia_i  (vram_din_i),
+        .wea_i  (i_vram_we),
+        .addra_i(i_vram_addr),
+        .dia_i  (i_vram_din),
         .doa_o  (vram2cpu_display_data),
         
-        .clkb_i (clk_pixel_i),
+        .clkb_i (i_clk_pixel),
         .enb_i  (crtc_new_col_stb),
         .addrb_i(vga2vram_addr),
         .dob_o  (display_data)
@@ -234,21 +234,21 @@ module VGAController
         )
         AttributeRAM
         (
-        .clka_i (clk_cpu_i),
+        .clka_i (i_clk_cpu),
         .ena_i  (attribute_ram_en),
-        .wea_i  (vram_we_i),
-        .addra_i(vram_addr_i),
-        .dia_i  (vram_din_i),
+        .wea_i  (i_vram_we),
+        .addra_i(i_vram_addr),
+        .dia_i  (i_vram_din),
         .doa_o  (vram2cpu_attribute_data),
         
-        .clkb_i (clk_pixel_i),
+        .clkb_i (i_clk_pixel),
         .enb_i  (crtc_new_col_stb),
         .addrb_i(vga2vram_addr),
         .dob_o  (attribute_data)
         );
     
     // output logic
-    assign vram_dout_o = (status_reg[2]) ? vram2cpu_attribute_data
+    assign o_vram_dout = (status_reg[2]) ? vram2cpu_attribute_data
                                          : vram2cpu_display_data;
     
     
@@ -260,21 +260,21 @@ module VGAController
     
     // character generator write enable... matches delay from video RAM access
     initial char_gen_we_ff = 1'b0;
-    always @(posedge clk_pixel_i)
+    always @(posedge i_clk_pixel)
         char_gen_we_ff <= #1 crtc_new_col_stb;
     
     // character glyph row... matches delay from video RAM access
     initial glyph_row_reg = 4'd0;
-    always @(posedge clk_pixel_i)
+    always @(posedge i_clk_pixel)
         glyph_row_reg <= #1 crtc_line[3:0];
     
     CharacterGenerator CharacterGenerator
         (
-        .clk_i      (clk_pixel_i),
-        .we_i       (char_gen_we_ff),
-        .ascii_i    (display_data),
-        .glyph_row_i(glyph_row_reg),
-        .pixel_o    (char_gen_pixel)
+        .i_clk      (i_clk_pixel),
+        .i_we       (char_gen_we_ff),
+        .i_ascii    (display_data),
+        .i_glyph_row(glyph_row_reg),
+        .o_pixel    (char_gen_pixel)
         );
     
     
@@ -286,16 +286,16 @@ module VGAController
     
     // enable decoder enable... matches output delays to character generator
     initial attr_en_ff = 1'b0;
-    always @(posedge clk_pixel_i)
+    always @(posedge i_clk_pixel)
         attr_en_ff <= #1 char_gen_we_ff;
     
     AttributeDecoder AttributeDecoder
         (
-        .clk_i   (clk_pixel_i),
-        .en_i    (attr_en_ff),
-        .attr_i  (attribute_data),
-        .fg_rgb_o(attr_fg_rgb),
-        .bg_rgb_o(attr_bg_rgb)
+        .i_clk   (i_clk_pixel),
+        .i_en    (attr_en_ff),
+        .i_attr  (attribute_data),
+        .o_fg_rgb(attr_fg_rgb),
+        .o_bg_rgb(attr_bg_rgb)
         );
     
     
@@ -311,23 +311,23 @@ module VGAController
     
     Synchronizer Synchronizer
         (
-        .clk_i     (clk_pixel_i),
-        .en_i      (status_reg[0]),
-        .hsync_i   (crtc_hsync),
-        .vsync_i   (crtc_vsync),
-        .video_on_i(crtc_video_on),
-        .pixel_i   (char_gen_pixel),
-        .fg_rgb_i  (attr_fg_rgb),
-        .bg_rgb_i  (attr_bg_rgb),
-        .cursor_i  (cursor_pixel),
-        .rgb_o     (sync_rgb),
-        .hsync_o   (sync_hsync),
-        .vsync_o   (sync_vsync)
+        .i_clk     (i_clk_pixel),
+        .i_en      (status_reg[0]),
+        .i_hsync   (crtc_hsync),
+        .i_vsync   (crtc_vsync),
+        .i_video_on(crtc_video_on),
+        .i_pixel   (char_gen_pixel),
+        .i_fg_rgb  (attr_fg_rgb),
+        .i_bg_rgb  (attr_bg_rgb),
+        .i_cursor  (cursor_pixel),
+        .o_rgb     (sync_rgb),
+        .o_hsync   (sync_hsync),
+        .o_vsync   (sync_vsync)
         );
     
     // output logic
-    assign rgb_o   = sync_rgb;
-    assign hsync_o = sync_hsync;
-    assign vsync_o = sync_vsync;
+    assign o_rgb   = sync_rgb;
+    assign o_hsync = sync_hsync;
+    assign o_vsync = sync_vsync;
     
 endmodule

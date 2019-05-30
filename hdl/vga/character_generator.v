@@ -35,13 +35,13 @@ Purpose : Character generator for the VGA text-mode controller module.
 
 module CharacterGenerator
     (
-    input wire        clk_i,        // pixel clock
-    input wire        we_i,         // write enable signal
+    input wire        i_clk,        // pixel clock
+    input wire        i_we,         // write enable signal
     
-    input wire  [7:0] ascii_i,      // 8-bit ASCII character
-    input wire  [3:0] glyph_row_i,  // character glyph row
+    input wire  [7:0] i_ascii,      // 8-bit ASCII character
+    input wire  [3:0] i_glyph_row,  // character glyph row
     
-    output wire       pixel_o       // pixel output
+    output wire       o_pixel       // pixel output
     );
     
     
@@ -51,8 +51,8 @@ module CharacterGenerator
     wire [11:0] char_rom_addr;
     wire [7:0]  char_rom_data;
     
-    assign char_rom_en   = we_i;
-    assign char_rom_addr = {ascii_i, glyph_row_i};
+    assign char_rom_en   = i_we;
+    assign char_rom_addr = {i_ascii, i_glyph_row};
     
     // 4K x 8-bit character ROM
     ROM_BRAM
@@ -63,10 +63,10 @@ module CharacterGenerator
         )
         CharacterROM
         (
-        .clk_i (clk_i),
-        .en_i  (char_rom_en),
-        .addr_i(char_rom_addr),
-        .dout_o(char_rom_data)
+        .i_clk (i_clk),
+        .i_en  (char_rom_en),
+        .i_addr(char_rom_addr),
+        .o_data(char_rom_data)
         );
     
     
@@ -76,17 +76,17 @@ module CharacterGenerator
     reg [7:0] glyph_pixels_reg;     // glyph pixels shift register
     
     initial glyph_pixels_ld_ff = 1'b0;
-    always @(posedge clk_i)
-        glyph_pixels_ld_ff <= #1 we_i;
+    always @(posedge i_clk)
+        glyph_pixels_ld_ff <= #1 i_we;
     
     // glyph pixels shift register
     initial glyph_pixels_reg = 8'd0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(glyph_pixels_ld_ff)
             glyph_pixels_reg <= #1 char_rom_data;
         else
             glyph_pixels_reg <= #1 {glyph_pixels_reg[6:0], 1'b0};
     
-    assign pixel_o = glyph_pixels_reg[7];
+    assign o_pixel = glyph_pixels_reg[7];
     
 endmodule

@@ -52,18 +52,18 @@ module CRTC
               VS_POL     = 1'b0         // negative pulse
     )
     (
-    input wire        clk_i,            // pixel clock
+    input wire        i_clk,            // pixel clock
     
-    output wire       new_col_stb_o,    // new column strobe
-    output wire [6:0] col_o,            // column
-    output wire [9:0] line_o,           // scan line
+    output wire       o_new_col_stb,    // new column strobe
+    output wire [6:0] o_col,            // column
+    output wire [9:0] o_line,           // scan line
     
-    output wire       hsync_o,          // horizontal sync
-    output wire       vsync_o,          // vertical sync
+    output wire       o_hsync,          // horizontal sync
+    output wire       o_vsync,          // vertical sync
     
-    output wire       cursor_o,         // cursor timing
+    output wire       o_cursor,         // cursor timing
     
-    output wire       video_on_o        // active video flag
+    output wire       o_video_on        // active video flag
     );
     
     
@@ -75,7 +75,7 @@ module CRTC
     assign glyph_end = (glyph_pixel_reg == 3'o7);    
     
     initial glyph_pixel_reg = 3'o0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         glyph_pixel_reg <= #1 glyph_pixel_reg + 3'o1;
     
     
@@ -91,14 +91,14 @@ module CRTC
     
     // new column strobe
     initial new_col_stb_ff = 1'b0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         new_col_stb_ff <= #1 col_start;
     
     assign last_col = (col_reg == HS_TOTAL - 7'd1);
     
     // column counter
     initial col_reg = 7'd0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(glyph_end) begin
             if(last_col)
                 col_reg <= #1 7'd0;
@@ -108,12 +108,12 @@ module CRTC
     
     // pipeline delay to match sync timing
     initial col_p1_reg  = 7'd0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         col_p1_reg  <= #1 col_reg;
     
     // output logic
-    assign new_col_stb_o = new_col_stb_ff;
-    assign col_o         = col_p1_reg;
+    assign o_new_col_stb = new_col_stb_ff;
+    assign o_col         = col_p1_reg;
     
     
 /* SCAN LINE COUNTER **********************************************************/    
@@ -126,7 +126,7 @@ module CRTC
     
     // scan line counter
     initial line_reg = 10'd0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(last_col & glyph_end) begin
             if(last_line)
                 line_reg <= #1 10'd0;
@@ -136,11 +136,11 @@ module CRTC
     
     // pipeline delay to match sync timing
     initial line_p1_reg = 10'd0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         line_p1_reg <= #1 line_reg;
     
     // output logic
-    assign line_o = line_p1_reg;
+    assign o_line = line_p1_reg;
     
     
 /* SYNC SIGNALS ***************************************************************/
@@ -157,7 +157,7 @@ module CRTC
     
     // horizontal sync
     initial hsync_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(hsync_on)
             hsync_ff <= #1 HS_POL;
         else
@@ -166,7 +166,7 @@ module CRTC
     
     // vertical sync
     initial vsync_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(vsync_on)
             vsync_ff <= #1 VS_POL;
         else
@@ -174,8 +174,8 @@ module CRTC
     end
     
     // output logic
-    assign hsync_o = hsync_ff;
-    assign vsync_o = vsync_ff;
+    assign o_hsync = hsync_ff;
+    assign o_vsync = vsync_ff;
     
     
 /* CURSOR TIMING **************************************************************/
@@ -188,18 +188,18 @@ module CRTC
     
     // frame counter
     initial frame_cnt_reg = 5'd0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(frame_end)
             frame_cnt_reg <= #1 frame_cnt_reg + 5'd1;
     
     // cursor blink rate is tied to frame rate. Blinks at 1.875 Hz
     // 1/(2 * 16 / 60) Hz
     initial cursor_ff = 1'b0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         cursor_ff <= #1 frame_cnt_reg[4];
     
     // output logic
-    assign cursor_o = cursor_ff;
+    assign o_cursor = cursor_ff;
     
     
 /* ACTIVE VIDEO FLAG **********************************************************/
@@ -208,10 +208,10 @@ module CRTC
     
     // active video flag
     initial video_on_ff = 1'b0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         video_on_ff <= #1 (col_reg < HS_ACTIVE) & (line_reg < VS_ACTIVE);
     
     // output logic
-    assign video_on_o = video_on_ff;
+    assign o_video_on = video_on_ff;
     
 endmodule

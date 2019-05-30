@@ -65,23 +65,23 @@ module v65C02_Top
     wire clk_cpu;                       // 50 MHz CPU clock
     wire clk_pixel;                     // 25.175 MHz VGA pixel clock
     
-    Clock Clock
+    ClockGen ClockGen
         (
-        .clk_100M_i   (CLK100MHZ),
-        .clk_50M_o    (clk_cpu),
-        .clk_25_175M_o(clk_pixel)
+        .i_clk_nexys(CLK100MHZ),
+        .o_clk_cpu  (clk_cpu),
+        .o_clk_vga  (clk_pixel)
         );
     
     
-/* CPU RESET BUTTON ***********************************************************/
+/* RESET CIRCUIT **************************************************************/
     
-    wire rst_cpu;                       // v65C02 reset signal
+    wire reset;                         // reset signal
     
-    CPUReset CPUReset
+    Reset Reset
         (
-        .clk_i(clk_cpu),
-        .rst_i(~CPU_RESETN),
-        .rst_o(rst_cpu)
+        .i_clk(clk_cpu),
+        .i_rst(~CPU_RESETN),
+        .o_rst(reset)
         );
     
     
@@ -94,15 +94,15 @@ module v65C02_Top
     
     v65C02 CPU
         (
-        .CLK_i(clk_cpu),
-        .RST_i(rst_cpu),
-        .AB_o (cpu_addr),
-        .DB_i (cpu_din),
-        .DB_o (cpu_dout),
-        .WE_o (cpu_we),
-        .IRQ_i(1'b0),
-        .NMI_i(1'b0),
-        .RDY_i(1'b1)
+        .i_clk( clk_cpu),
+        .i_rst (reset),
+        .i_irq (1'b0),
+        .i_nmi (1'b0),
+        .i_rdy (1'b1),
+        .o_addr(cpu_addr),
+        .o_we  (cpu_we),
+        .o_data(cpu_dout),
+        .i_data(cpu_din)
         );
     
     
@@ -122,10 +122,10 @@ module v65C02_Top
         )
         BIOS
         (
-        .clk_i (clk_cpu),
-        .en_i  (bios_en),
-        .addr_i(cpu_addr[13:0]),
-        .dout_o(bios_dout)
+        .i_clk (clk_cpu),
+        .i_en  (bios_en),
+        .i_addr(cpu_addr[13:0]),
+        .o_data(bios_dout)
         );
     
     
@@ -144,12 +144,12 @@ module v65C02_Top
         )
         RAM
         (
-        .clk_i (clk_cpu),
-        .en_i  (ram_en),
-        .we_i  (cpu_we),
-        .addr_i(cpu_addr[15:0]),
-        .din_i (cpu_dout),
-        .dout_o(ram_dout)
+        .i_clk (clk_cpu),
+        .i_en  (ram_en),
+        .i_we  (cpu_we),
+        .i_addr(cpu_addr),
+        .i_data(cpu_dout),
+        .o_data(ram_dout)
         );
     
     
@@ -198,21 +198,21 @@ module v65C02_Top
     
     VGAController VGAController
         (
-        .clk_cpu_i  (clk_cpu),
-        .clk_pixel_i(clk_pixel),
-        .vram_en_i  (vga_vram_en),
-        .vram_we_i  (cpu_we),
-        .vram_addr_i(cpu_addr[11:0]),
-        .vram_din_i (cpu_dout),
-        .vram_dout_o(vga_vram_dout),
-        .reg_en_i   (vga_reg_en),
-        .reg_we_i   (cpu_we),
-        .regsel_i   (cpu_addr[1:0]),
-        .reg_din_i  (cpu_dout),
-        .reg_dout_o (vga_reg_dout),
-        .rgb_o      (vga_rgb),
-        .hsync_o    (vga_hsync),
-        .vsync_o    (vga_vsync)
+        .i_clk_cpu  (clk_cpu),
+        .i_clk_pixel(clk_pixel),
+        .i_vram_en  (vga_vram_en),
+        .i_vram_we  (cpu_we),
+        .i_vram_addr(cpu_addr[11:0]),
+        .i_vram_din (cpu_dout),
+        .o_vram_dout(vga_vram_dout),
+        .i_reg_en   (vga_reg_en),
+        .i_reg_we   (cpu_we),
+        .i_reg_sel  (cpu_addr[1:0]),
+        .i_reg_din  (cpu_dout),
+        .o_reg_dout (vga_reg_dout),
+        .o_rgb      (vga_rgb),
+        .o_hsync    (vga_hsync),
+        .o_vsync    (vga_vsync)
         );
     
     // output logic
@@ -228,13 +228,13 @@ module v65C02_Top
     
     SevenSegmentController SevenSegmentController
         (
-        .clk_i   (clk_cpu),
-        .en_i    (sseg_en),
-        .we_i    (cpu_we),
-        .regsel_i(cpu_addr[2:0]),
-        .din_i   (cpu_dout),
-        .an_n_o  (sseg_an_n),
-        .sseg_n_o(sseg_sseg_n)
+        .i_clk    (clk_cpu),
+        .i_en     (sseg_en),
+        .i_we     (cpu_we),
+        .i_reg_sel(cpu_addr[2:0]),
+        .i_data   (cpu_dout),
+        .o_an_n   (sseg_an_n),
+        .o_sseg_n (sseg_sseg_n)
         );
     
     // output logic
@@ -249,14 +249,14 @@ module v65C02_Top
     
     UARTController UARTController
         (
-        .clk_i   (clk_cpu),
-        .en_i    (uart_en),
-        .we_i    (cpu_we),
-        .regsel_i(cpu_addr[2:0]),
-        .din_i   (cpu_dout),
-        .dout_o  (uart_dout),
-        .rx_i    (UART_TXD_IN),
-        .tx_o    (uart_tx)
+        .i_clk    (clk_cpu),
+        .i_en     (uart_en),
+        .i_we     (cpu_we),
+        .i_reg_sel(cpu_addr[2:0]),
+        .i_data   (cpu_dout),
+        .o_data   (uart_dout),
+        .i_rx     (UART_TXD_IN),
+        .o_tx     (uart_tx)
         );
     
     // output logic
@@ -269,12 +269,12 @@ module v65C02_Top
     
     KeyboardController KeyboardController
         (
-        .clk_i      (clk_cpu),
-        .en_i       (kbd_en),
-        .regsel_i   (cpu_addr[0]),
-        .dout_o     (kbd_dout),
-        .ps2_clk_io (PS2_CLK),
-        .ps2_data_io(PS2_DATA)
+        .i_clk      (clk_cpu),
+        .i_en       (kbd_en),
+        .i_reg_sel  (cpu_addr[0]),
+        .o_data     (kbd_dout),
+        .io_ps2_clk (PS2_CLK),
+        .io_ps2_data(PS2_DATA)
         );
     
     
@@ -284,12 +284,12 @@ module v65C02_Top
     
     TimerController TimerController
         (
-        .clk_i   (clk_cpu),
-        .en_i    (tmr_en),
-        .we_i    (cpu_we),
-        .regsel_i(cpu_addr[2:0]),
-        .din_i   (cpu_dout),
-        .dout_o  (tmr_dout)
+        .i_clk    (clk_cpu),
+        .i_en     (tmr_en),
+        .i_we     (cpu_we),
+        .i_reg_sel(cpu_addr[2:0]),
+        .i_data   (cpu_dout),
+        .o_data   (tmr_dout)
         );
     
     

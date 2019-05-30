@@ -36,11 +36,12 @@ module ROM_BRAM
               INIT_FILE = ""
     )
     (
-    input wire                       clk_i,    // clock
-    input wire                       en_i,     // enable
+    input wire                       i_clk,    // clock
     
-    input wire [clogb2(DEPTH) - 1:0] addr_i,   // log2(DEPTH)-bit address
-    output reg [(WIDTH - 1):0]       dout_o    // WIDTH-bit data
+    input wire                       i_en,     // enable
+    input wire [clogb2(DEPTH) - 1:0] i_addr,   // log2(DEPTH)-bit address
+    
+    output reg [(WIDTH - 1):0]       o_data    // WIDTH-bit data
     );
     
     
@@ -63,10 +64,10 @@ module ROM_BRAM
     endgenerate
     
     // output register
-    initial dout_o = 8'h00;
-    always @(posedge clk_i)
-        if(en_i)
-            dout_o <= #1 rom_reg[addr_i];
+    initial o_data = 8'h00;
+    always @(posedge i_clk)
+        if(i_en)
+            o_data <= #1 rom_reg[i_addr];
     
     
 /* LOG-BASE-2 *****************************************************************/

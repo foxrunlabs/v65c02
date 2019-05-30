@@ -29,14 +29,14 @@ Purpose : UART Receiver module for the v65C02 8-bit Computer.
 
 module UART_RX
     (
-    input  wire       clk_i,            // CPU clock
+    input  wire       i_clk,            // CPU clock
     
-    input  wire       brg_stb_i,        // baud rate generator strobe
+    input  wire       i_brg_stb,        // baud rate generator strobe
     
-    input  wire       din_i,            // 1-bit serial data input
-    output wire [7:0] dout_o,           // 8-bit data output
+    input  wire       i_data,           // 1-bit serial data input
+    output wire [7:0] o_data,           // 8-bit data output
     
-    output reg        done_stb_o        // new received byte strobe
+    output reg        o_done_stb        // new received byte strobe
     );
     
     
@@ -46,7 +46,7 @@ module UART_RX
     reg [3:0] brg_count_ns;
     
     initial brg_count_reg = 4'h0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         brg_count_reg <= #1 brg_count_ns;
     
     
@@ -56,7 +56,7 @@ module UART_RX
     reg [3:0] bit_count_ns;
     
     initial bit_count_reg = 4'h0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         bit_count_reg <= #1 bit_count_ns;
     
     
@@ -75,25 +75,25 @@ module UART_RX
     
     // FSM state register
     initial state_reg = S_IDLE;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         state_reg <= #1 state_ns;
     
     // FSM logic
     always @* begin
         brg_count_ns = brg_count_reg;   // baud rate generator counter
         bit_count_ns = bit_count_reg;   // bit counter
-        done_stb_o   = 1'b0;            // "done" strobe
+        o_done_stb   = 1'b0;            // "done" strobe
         state_ns     = state_reg;       // state register
         
         case(state_reg)
             S_IDLE:
-                if(din_i == B_START) begin      // triggered on start bit
+                if(i_data == B_START) begin      // triggered on start bit
                     brg_count_ns = 4'h0;        // reset bit counter
                     state_ns     = S_START;
                 end
             
             S_START:
-                if(brg_stb_i) begin             // correct timing for baud rate
+                if(i_brg_stb) begin             // correct timing for baud rate
                     // half sample period to find middle of bit
                     if(brg_count_reg == 4'h7) begin
                         brg_count_ns = 4'h0;
@@ -106,7 +106,7 @@ module UART_RX
                 end
             
             S_DATA:
-                if(brg_stb_i)
+                if(i_brg_stb)
                     // sample bit at middle, based on start bit timing
                     if(brg_count_reg == 4'hF) begin
                         brg_count_ns = 4'h0;
@@ -122,10 +122,10 @@ module UART_RX
                     end
             
             S_STOP:
-                if(brg_stb_i) begin
+                if(i_brg_stb) begin
                     // we must account for the stop bit
                     if(brg_count_reg == 4'hF) begin
-                        done_stb_o = 1'b1;      // toggle the "done" flag
+                        o_done_stb = 1'b1;      // toggle the "done" flag
                         state_ns   = S_IDLE;
                     end
                     else begin
@@ -149,16 +149,16 @@ module UART_RX
     
     // receiver shift register only enabled in sync with baud rate generator,
     // during the data portion of the FSM, and in the middle of a received bit.
-    assign rxsr_en = (brg_stb_i) &
+    assign rxsr_en = (i_brg_stb) &
                      (state_reg == S_DATA) &
                      (brg_count_reg == 4'hF);
     
     initial rxsr_reg = {8{B_IDLE}};
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(rxsr_en)
-            rxsr_reg <= #1 {din_i, rxsr_reg[7:1]};
+            rxsr_reg <= #1 {i_data, rxsr_reg[7:1]};
     
     // output logic
-    assign dout_o = rxsr_reg;
+    assign o_data = rxsr_reg;
     
 endmodule

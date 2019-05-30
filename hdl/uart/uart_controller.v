@@ -29,17 +29,17 @@ Purpose : UART controller for the v65C02 8-bit Computer.
 
 module UARTController
     (
-    input  wire       clk_i,        // CPU clock
+    input  wire       i_clk,        // CPU clock
     
-    input  wire       en_i,         // control bus select
-    input  wire       we_i,         // write enable
+    input  wire       i_en,         // control bus select
+    input  wire       i_we,         // write enable
     
-    input  wire [2:0] regsel_i,     // 3-bit register select
-    input  wire [7:0] din_i,        // 8-bit register data input
-    output wire [7:0] dout_o,       // 8-bit register data output
+    input  wire [2:0] i_reg_sel,    // 3-bit register select
+    input  wire [7:0] i_data,       // 8-bit register data input
+    output wire [7:0] o_data,       // 8-bit register data output
     
-    input  wire       rx_i,         // serial input
-    output wire       tx_o          // serial output
+    input  wire       i_rx,         // serial input
+    output wire       o_tx          // serial output
     );
     
     
@@ -51,8 +51,8 @@ module UARTController
     // synchronize serial input to CPU clock
     initial rx_async_ff = B_IDLE;
     initial rx_sync_ff  = B_IDLE;
-    always @(posedge clk_i) begin
-        rx_async_ff <= #1 rx_i;
+    always @(posedge i_clk) begin
+        rx_async_ff <= #1 i_rx;
         rx_sync_ff  <= #1 rx_async_ff;
     end
     
@@ -71,28 +71,28 @@ module UARTController
     reg [7:0] dout_reg;             // register data output
     
     // input registers
-    initial brgl_reg   = 8'h00;
-    initial brgh_reg   = 8'h00;
-    always @(posedge clk_i)
-        if(en_i)
-            if(we_i)
-                case(regsel_i)
-                    BRGL:   brgl_reg <= #1 din_i;
-                    BRGH:   brgh_reg <= #1 din_i;
+    initial brgl_reg = 8'h00;
+    initial brgh_reg = 8'h00;
+    always @(posedge i_clk)
+        if(i_en)
+            if(i_we)
+                case(i_reg_sel)
+                    BRGL:   brgl_reg <= #1 i_data;
+                    BRGH:   brgh_reg <= #1 i_data;
                 endcase
     
     // output registers
     initial dout_reg = 8'h00;
-    always @(posedge clk_i)
-        if(en_i)
-            case(regsel_i)
+    always @(posedge i_clk)
+        if(i_en)
+            case(i_reg_sel)
                 STATUS:  dout_reg <= #1 {6'b0000_00, rx_full_ff, tx_busy};
                 RXREG:   dout_reg <= #1 rxdata_reg;
                 default: dout_reg <= #1 8'h00;
             endcase
     
     // output logic
-    assign dout_o = dout_reg;
+    assign o_data = dout_reg;
     
     
 /* BAUD RATE GENERATOR ********************************************************/
@@ -101,7 +101,7 @@ module UARTController
     wire        brg_stb;            // baud rate generator strobe
     
     initial brg_count_reg = 16'h0000;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(brg_count_reg == {brgh_reg, brgl_reg})
             brg_count_reg <= #1 16'h0000;
         else
@@ -117,20 +117,20 @@ module UARTController
     wire tx_dout;                   // serial data output
     wire tx_busy;                   // transmit busy
     
-    assign tx_we = en_i & we_i & (regsel_i == TXREG);
+    assign tx_we = i_en & i_we & (i_reg_sel == TXREG);
     
     UART_TX UART_TX
         (
-        .clk_i    (clk_i),
-        .brg_stb_i(brg_stb),
-        .we_i     (tx_we),
-        .din_i    (din_i),
-        .dout_o   (tx_dout),
-        .busy_o   (tx_busy)
+        .i_clk    (i_clk),
+        .i_brg_stb(brg_stb),
+        .i_we     (tx_we),
+        .i_data   (i_data),
+        .o_data   (tx_dout),
+        .o_busy   (tx_busy)
         );
     
     // output logic
-    assign tx_o = tx_dout;
+    assign o_tx = tx_dout;
     
     
 /* RECEIVER *******************************************************************/
@@ -143,27 +143,27 @@ module UARTController
     
     UART_RX UART_RX
         (
-        .clk_i     (clk_i),
-        .brg_stb_i (brg_stb),
-        .din_i     (rx_sync_ff),
-        .dout_o    (rx_dout),
-        .done_stb_o(rx_done_stb)
+        .i_clk     (i_clk),
+        .i_brg_stb (brg_stb),
+        .i_data    (rx_sync_ff),
+        .o_data    (rx_dout),
+        .o_done_stb(rx_done_stb)
         );
     
     // received data register (RXDATA)
     initial rxdata_reg = 8'h00;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(rx_done_stb)
             rxdata_reg <= #1 rx_dout;           // stores read data
     
     // receiver full flag
     initial rx_full_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(rx_done_stb)
             rx_full_ff <= #1 1'b1;
         else
-            if(en_i)
-                if(regsel_i == RXREG)
+            if(i_en)
+                if(i_reg_sel == RXREG)
                     rx_full_ff <= #1 1'b0;      // reset on read
     end
     

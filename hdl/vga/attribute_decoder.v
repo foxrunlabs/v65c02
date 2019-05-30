@@ -36,13 +36,13 @@ Purpose : Attribute decoder for the VGA text-mode controller module.
 
 module AttributeDecoder
     (
-    input wire        clk_i,        // pixel clock
-    input wire        en_i,         // enable
+    input wire        i_clk,        // pixel clock
+    input wire        i_en,         // enable
     
-    input wire [7:0]  attr_i,       // attribute
+    input wire [7:0]  i_attr,       // attribute
     
-    output reg [11:0] fg_rgb_o,     // foreground RGB444 value
-    output reg [11:0] bg_rgb_o      // background RGB444 value
+    output reg [11:0] o_fg_rgb,     // foreground RGB444 value
+    output reg [11:0] o_bg_rgb      // background RGB444 value
     );
     
     
@@ -51,29 +51,29 @@ module AttributeDecoder
     wire [3:0] fg_attr;
     
     // extract foreground attribute from 8-bit input
-    assign fg_attr = attr_i[3:0];
+    assign fg_attr = i_attr[3:0];
     
     // foreground RGB444 value
-    initial fg_rgb_o = 12'h000;
-    always @(posedge clk_i)
-        if(en_i)
+    initial o_fg_rgb = 12'h000;
+    always @(posedge i_clk)
+        if(i_en)
             case(fg_attr)
-                4'h0: fg_rgb_o <= #1 {4'd0,  4'd0,  4'd0 };    // black
-                4'h1: fg_rgb_o <= #1 {4'd0,  4'd0,  4'd10};    // blue
-                4'h2: fg_rgb_o <= #1 {4'd0,  4'd10, 4'd0 };    // green
-                4'h3: fg_rgb_o <= #1 {4'd0,  4'd10, 4'd10};    // cyan
-                4'h4: fg_rgb_o <= #1 {4'd10, 4'd0,  4'd0 };    // red
-                4'h5: fg_rgb_o <= #1 {4'd10, 4'd0,  4'd10};    // magenta
-                4'h6: fg_rgb_o <= #1 {4'd10, 4'd5,  4'd0 };    // brown
-                4'h7: fg_rgb_o <= #1 {4'd10, 4'd10, 4'd10};    // light gray
-                4'h8: fg_rgb_o <= #1 {4'd5,  4'd5,  4'd5 };    // dark gray
-                4'h9: fg_rgb_o <= #1 {4'd5,  4'd5,  4'd15};    // light blue
-                4'ha: fg_rgb_o <= #1 {4'd5,  4'd15, 4'd5 };    // light green
-                4'hb: fg_rgb_o <= #1 {4'd5,  4'd15, 4'd15};    // light cyan
-                4'hc: fg_rgb_o <= #1 {4'd15, 4'd5,  4'd5 };    // light red
-                4'hd: fg_rgb_o <= #1 {4'd15, 4'd5,  4'd15};    // light magenta
-                4'he: fg_rgb_o <= #1 {4'd15, 4'd15, 4'd5 };    // yellow
-                4'hf: fg_rgb_o <= #1 {4'd15, 4'd15, 4'd15};    // white
+                4'h0: o_fg_rgb <= #1 {4'd0,  4'd0,  4'd0 };    // black
+                4'h1: o_fg_rgb <= #1 {4'd0,  4'd0,  4'd10};    // blue
+                4'h2: o_fg_rgb <= #1 {4'd0,  4'd10, 4'd0 };    // green
+                4'h3: o_fg_rgb <= #1 {4'd0,  4'd10, 4'd10};    // cyan
+                4'h4: o_fg_rgb <= #1 {4'd10, 4'd0,  4'd0 };    // red
+                4'h5: o_fg_rgb <= #1 {4'd10, 4'd0,  4'd10};    // magenta
+                4'h6: o_fg_rgb <= #1 {4'd10, 4'd5,  4'd0 };    // brown
+                4'h7: o_fg_rgb <= #1 {4'd10, 4'd10, 4'd10};    // light gray
+                4'h8: o_fg_rgb <= #1 {4'd5,  4'd5,  4'd5 };    // dark gray
+                4'h9: o_fg_rgb <= #1 {4'd5,  4'd5,  4'd15};    // light blue
+                4'ha: o_fg_rgb <= #1 {4'd5,  4'd15, 4'd5 };    // light green
+                4'hb: o_fg_rgb <= #1 {4'd5,  4'd15, 4'd15};    // light cyan
+                4'hc: o_fg_rgb <= #1 {4'd15, 4'd5,  4'd5 };    // light red
+                4'hd: o_fg_rgb <= #1 {4'd15, 4'd5,  4'd15};    // light magenta
+                4'he: o_fg_rgb <= #1 {4'd15, 4'd15, 4'd5 };    // yellow
+                4'hf: o_fg_rgb <= #1 {4'd15, 4'd15, 4'd15};    // white
             endcase
     
     
@@ -82,29 +82,29 @@ module AttributeDecoder
     wire [3:0] bg_attr;
     
     // extract background attribute from 8-bit input
-    assign bg_attr = attr_i[7:4];
+    assign bg_attr = i_attr[7:4];
     
     // background RGB444 value
-    initial bg_rgb_o = 12'h000;
-    always @(posedge clk_i)
-        if(en_i)
+    initial o_bg_rgb = 12'h000;
+    always @(posedge i_clk)
+        if(i_en)
             case(bg_attr)
-                4'h0: bg_rgb_o <= #1 {4'd0,  4'd0,  4'd0 };    // black
-                4'h1: bg_rgb_o <= #1 {4'd0,  4'd0,  4'd10};    // blue
-                4'h2: bg_rgb_o <= #1 {4'd0,  4'd10, 4'd0 };    // green
-                4'h3: bg_rgb_o <= #1 {4'd0,  4'd10, 4'd10};    // cyan
-                4'h4: bg_rgb_o <= #1 {4'd10, 4'd0,  4'd0 };    // red
-                4'h5: bg_rgb_o <= #1 {4'd10, 4'd0,  4'd10};    // magenta
-                4'h6: bg_rgb_o <= #1 {4'd10, 4'd5,  4'd0 };    // brown
-                4'h7: bg_rgb_o <= #1 {4'd10, 4'd10, 4'd10};    // light gray
-                4'h8: bg_rgb_o <= #1 {4'd5,  4'd5,  4'd5 };    // dark gray
-                4'h9: bg_rgb_o <= #1 {4'd5,  4'd5,  4'd15};    // light blue
-                4'ha: bg_rgb_o <= #1 {4'd5,  4'd15, 4'd5 };    // light green
-                4'hb: bg_rgb_o <= #1 {4'd5,  4'd15, 4'd15};    // light cyan
-                4'hc: bg_rgb_o <= #1 {4'd15, 4'd5,  4'd5 };    // light red
-                4'hd: bg_rgb_o <= #1 {4'd15, 4'd5,  4'd15};    // light magenta
-                4'he: bg_rgb_o <= #1 {4'd15, 4'd15, 4'd5 };    // yellow
-                4'hf: bg_rgb_o <= #1 {4'd15, 4'd15, 4'd15};    // white
+                4'h0: o_bg_rgb <= #1 {4'd0,  4'd0,  4'd0 };    // black
+                4'h1: o_bg_rgb <= #1 {4'd0,  4'd0,  4'd10};    // blue
+                4'h2: o_bg_rgb <= #1 {4'd0,  4'd10, 4'd0 };    // green
+                4'h3: o_bg_rgb <= #1 {4'd0,  4'd10, 4'd10};    // cyan
+                4'h4: o_bg_rgb <= #1 {4'd10, 4'd0,  4'd0 };    // red
+                4'h5: o_bg_rgb <= #1 {4'd10, 4'd0,  4'd10};    // magenta
+                4'h6: o_bg_rgb <= #1 {4'd10, 4'd5,  4'd0 };    // brown
+                4'h7: o_bg_rgb <= #1 {4'd10, 4'd10, 4'd10};    // light gray
+                4'h8: o_bg_rgb <= #1 {4'd5,  4'd5,  4'd5 };    // dark gray
+                4'h9: o_bg_rgb <= #1 {4'd5,  4'd5,  4'd15};    // light blue
+                4'ha: o_bg_rgb <= #1 {4'd5,  4'd15, 4'd5 };    // light green
+                4'hb: o_bg_rgb <= #1 {4'd5,  4'd15, 4'd15};    // light cyan
+                4'hc: o_bg_rgb <= #1 {4'd15, 4'd5,  4'd5 };    // light red
+                4'hd: o_bg_rgb <= #1 {4'd15, 4'd5,  4'd15};    // light magenta
+                4'he: o_bg_rgb <= #1 {4'd15, 4'd15, 4'd5 };    // yellow
+                4'hf: o_bg_rgb <= #1 {4'd15, 4'd15, 4'd15};    // white
             endcase
     
 endmodule

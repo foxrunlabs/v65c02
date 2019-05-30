@@ -29,14 +29,14 @@ Purpose : 32-bit timer controller for the v65C02 8-bit Computer.
 
 module TimerController
     (
-    input  wire       clk_i,        // CPU clock
+    input  wire       i_clk,        // CPU clock
     
-    input  wire       en_i,         // controller bus select
-    input  wire       we_i,         // controller bus write enable
+    input  wire       i_en,         // controller bus select
+    input  wire       i_we,         // controller bus write enable
     
-    input  wire [2:0] regsel_i,     // 3-bit register select
-    input  wire [7:0] din_i,        // 8-bit register data input
-    output reg  [7:0] dout_o        // 8-bit register data output
+    input  wire [2:0] i_reg_sel,    // 3-bit register select
+    input  wire [7:0] i_data,       // 8-bit register data input
+    output reg  [7:0] o_data        // 8-bit register data output
     );
     
     
@@ -53,27 +53,27 @@ module TimerController
     
     // input registers
     initial timer_reg = 32'h00000000;
-    always @(posedge clk_i)
-        if(en_i)
-            if(we_i)
-                case(regsel_i)
-                    R_TIMER08: timer_reg <= #1 {timer_reg[31:8], din_i};
-                    R_TIMER16: timer_reg <= #1 {timer_reg[31:16], din_i,
+    always @(posedge i_clk)
+        if(i_en)
+            if(i_we)
+                case(i_reg_sel)
+                    R_TIMER08: timer_reg <= #1 {timer_reg[31:8],  i_data};
+                    R_TIMER16: timer_reg <= #1 {timer_reg[31:16], i_data,
                                                 timer_reg[7:0]};
-                    R_TIMER24: timer_reg <= #1 {timer_reg[31:24], din_i,
+                    R_TIMER24: timer_reg <= #1 {timer_reg[31:24], i_data,
                                                 timer_reg[15:0]};
-                    R_TIMER32: timer_reg <= #1 {din_i, timer_reg[23:0]};
+                    R_TIMER32: timer_reg <= #1 {i_data, timer_reg[23:0]};
                 endcase
     
-    assign timer_rst = en_i & we_i & (regsel_i == R_TIMER32);
+    assign timer_rst = i_en & i_we & (i_reg_sel == R_TIMER32);
     
     // output registers
-    initial dout_o = 8'h00;
-    always @(posedge clk_i)
-        if(en_i)
-            case(regsel_i)
-                R_STATUS: dout_o <= #1 {7'b0000_000, ovrfl_ff};
-                default:  dout_o <= #1 8'h00;
+    initial o_data = 8'h00;
+    always @(posedge i_clk)
+        if(i_en)
+            case(i_reg_sel)
+                R_STATUS: o_data <= #1 {7'b0000_000, ovrfl_ff};
+                default:  o_data <= #1 8'h00;
             endcase
     
     
@@ -86,7 +86,7 @@ module TimerController
     
     // 32-bit counter
     initial counter_reg = 32'h00000000;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(timer_rst)
             counter_reg <= #1 32'h00000000;
         else
@@ -97,7 +97,7 @@ module TimerController
     
     // overflow flag (OVRFL)
     initial ovrfl_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(timer_rst)
             ovrfl_ff <= #1 1'b0;
         else

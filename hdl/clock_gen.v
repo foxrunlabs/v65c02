@@ -17,41 +17,44 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : Clock
-File Name   : clock.v
+Module Name : ClockGen
+File Name   : clock_gen.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
 ================================================================================
 Purpose : Clock generator for the v65C02 8-bit Computer.
+          
+          Generates a 50 MHz CPU clock and a 25.175 MHz VGA clock from the
+          100 MHz Nexys 4 DDR clock.
 *******************************************************************************/
 
 
-module Clock
+module ClockGen
     (
-    input  wire clk_100M_i,         // 100 MHz input clock
+    input  wire i_clk_nexys,        // 100 MHz input clock
     
-    output wire clk_50M_o,          // 50 MHz CPU clock
-    output wire clk_25_175M_o       // 25.175 MHz VGA pixel clock
+    output wire o_clk_cpu,          // 50 MHz
+    output wire o_clk_vga           // 25.175 MHz
     );
     
     
 /* INPUT BUFFER ***************************************************************/
     
-    wire clk_100M_buf;
+    wire clk_nexys_buf;
     
-    IBUF clk_100M_ibuf
+    IBUF NexysClockIBUF
         (
-        .I(clk_100M_i),
-        .O(clk_100M_buf)
+        .I(i_clk_nexys),
+        .O(clk_nexys_buf)
         );
     
     
 /* MMCM ***********************************************************************/
     
     wire clkfbout;
-    wire clk_50M;
-    wire clk_25_175M;
+    wire clk_cpu;
+    wire clk_vga;
     
     MMCME2_BASE
         #(
@@ -71,14 +74,14 @@ module Clock
         .STARTUP_WAIT      ("FALSE")
 
         )
-        mmcme2_base
+        MMCME2Base
         (
-        .CLKIN1   (clk_100M_buf),
+        .CLKIN1   (clk_nexys_buf),
         .RST      (1'b0),
         .PWRDWN   (1'b0),
-        .CLKOUT0  (clk_25_175M),
+        .CLKOUT0  (clk_vga),
         .CLKOUT0B (),
-        .CLKOUT1  (clk_50M),
+        .CLKOUT1  (clk_cpu),
         .CLKOUT1B (),
         .CLKOUT2  (),
         .CLKOUT2B (),
@@ -96,16 +99,16 @@ module Clock
     
 /* OUTPUT BUFFERS *************************************************************/
     
-    BUFG clk_50M_bufg
+    BUFG CPUClockBUFG
         (
-        .I(clk_50M),
-        .O(clk_50M_o)
+        .I(clk_cpu),
+        .O(o_clk_cpu)
         );
     
-    BUFG clk_25_175M_bufg
+    BUFG VGAClockBUFG
         (
-        .I(clk_25_175M),
-        .O(clk_25_175M_o)
+        .I(clk_vga),
+        .O(o_clk_vga)
         );
     
 endmodule

@@ -29,15 +29,15 @@ Purpose : UART Transmitter module for the v65C02 8-bit Computer.
 
 module UART_TX
     (
-    input wire        clk_i,        // system clock
+    input wire        i_clk,        // system clock
     
-    input wire        brg_stb_i,    // baud rate generator strobe
-    input wire        we_i,         // write enable
+    input wire        i_brg_stb,    // baud rate generator strobe
+    input wire        i_we,         // write enable
     
-    input  wire [7:0] din_i,        // 8-bit data input
-    output wire       dout_o,       // 1-bit serial output
+    input  wire [7:0] i_data,        // 8-bit data input
+    output wire       o_data,       // 1-bit serial output
     
-    output wire       busy_o        // busy flag
+    output wire       o_busy        // busy flag
     );
     
     
@@ -47,12 +47,12 @@ module UART_TX
     wire       brg_16_stb;          // baud rate generator divide-by-16 strobe
     
     initial brg_16_reg = 4'h0;
-    always @(posedge clk_i)
-        if(brg_stb_i)
+    always @(posedge i_clk)
+        if(i_brg_stb)
             brg_16_reg <= #1 brg_16_reg + 4'h1;
     
     // one clock-cycle strobe at a baud rate generator divide-by-16 rate
-    assign brg_16_stb = (brg_16_reg == 4'hF) & (brg_stb_i);
+    assign brg_16_stb = (brg_16_reg == 4'hF) & (i_brg_stb);
     
     
 /* TRANSMIT SHIFT REGISTER ****************************************************/
@@ -65,9 +65,9 @@ module UART_TX
     reg [9:0] txsr_reg;                 // 10-bit transmit shift register
     
     initial txsr_reg = {10{B_IDLE}};
-    always @(posedge clk_i)
-        if(we_i)
-            txsr_reg <= #1 {B_STOP, din_i, B_START};        // load
+    always @(posedge i_clk)
+        if(i_we)
+            txsr_reg <= #1 {B_STOP, i_data, B_START};        // load
         else
             if(brg_16_stb)
                 txsr_reg <= #1 {B_IDLE, txsr_reg[9:1]};     // right shift
@@ -78,12 +78,12 @@ module UART_TX
     reg dout_ff;                        // 1-bit serial data
     
     initial dout_ff = B_IDLE;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(brg_16_stb)
             dout_ff <= #1 txsr_reg[0];  // LSb of transmit shift register
     
     // output logic
-    assign dout_o = dout_ff;
+    assign o_data = dout_ff;
     
     
 /* BUSY FLAG ******************************************************************/
@@ -91,8 +91,8 @@ module UART_TX
     reg [3:0] bit_count_reg;            // transmitted bit counter
     
     initial bit_count_reg = 4'hF;       // empty
-    always @(posedge clk_i) begin
-        if(we_i)
+    always @(posedge i_clk) begin
+        if(i_we)
             bit_count_reg <= #1 4'd10;  // 10 bits to transmit
         else
             if(brg_16_stb)              // sync with baud rate generator/16
@@ -101,6 +101,6 @@ module UART_TX
     end
     
     // output logic
-    assign busy_o = (bit_count_reg != 4'hF);    // rolls through 0
+    assign o_busy = (bit_count_reg != 4'hF);    // rolls through 0
     
 endmodule

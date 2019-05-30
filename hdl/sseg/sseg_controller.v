@@ -29,15 +29,15 @@ Purpose : Seven-segment display controller for the v65C02 8-bit Computer.
 
 module SevenSegmentController
     (
-    input wire        clk_i,            // CPU clock
+    input wire        i_clk,            // CPU clock
     
-    input wire        en_i,             // controller bus enable
-    input wire        we_i,             // write enable
-    input wire  [2:0] regsel_i,         // 3-bit register select
-    input wire  [7:0] din_i,            // 8-bit data input bus
+    input wire        i_en,             // controller bus enable
+    input wire        i_we,             // write enable
+    input wire  [2:0] i_reg_sel,        // 3-bit register select
+    input wire  [7:0] i_data,           // 8-bit data input bus
     
-    output wire [7:0] an_n_o,           // anode (active low)
-    output wire [7:0] sseg_n_o          // segments (active low)
+    output wire [7:0] o_an_n,           // anode (active low)
+    output wire [7:0] o_sseg_n          // segments (active low)
     );
     
     
@@ -57,41 +57,41 @@ module SevenSegmentController
     // controller registers
     initial digits_reg = 8'd0;          // all digits disabled
     initial dp_reg     = 8'd0;          // all decimal points disabled
-    always @(posedge clk_i)
-        if(en_i)
-            if(we_i)
-                case(regsel_i)
-                    R_DIGITS: digits_reg <= #1 din_i;
-                    R_DP:     dp_reg     <= #1 din_i;
+    always @(posedge i_clk)
+        if(i_en)
+            if(i_we)
+                case(i_reg_sel)
+                    R_DIGITS: digits_reg <= #1 i_data;
+                    R_DP:     dp_reg     <= #1 i_data;
                 endcase
     
     // data registers
-    always @(posedge clk_i)
-        if(en_i)
-            if(we_i)
-                case(regsel_i)
+    always @(posedge i_clk)
+        if(i_en)
+            if(i_we)
+                case(i_reg_sel)
                     R_BYTE0:
                         begin
-                            data_reg[0] <= #1 din_i[3:0];
-                            data_reg[1] <= #1 din_i[7:4];
+                            data_reg[0] <= #1 i_data[3:0];
+                            data_reg[1] <= #1 i_data[7:4];
                         end
                 
                     R_BYTE1:
                         begin
-                            data_reg[2] <= #1 din_i[3:0];
-                            data_reg[3] <= #1 din_i[7:4];
+                            data_reg[2] <= #1 i_data[3:0];
+                            data_reg[3] <= #1 i_data[7:4];
                         end
                     
                     R_BYTE2:
                         begin
-                            data_reg[4] <= #1 din_i[3:0];
-                            data_reg[5] <= #1 din_i[7:4];
+                            data_reg[4] <= #1 i_data[3:0];
+                            data_reg[5] <= #1 i_data[7:4];
                         end
                 
                     R_BYTE3:
                         begin
-                            data_reg[6] <= #1 din_i[3:0];
-                            data_reg[7] <= #1 din_i[7:4];
+                            data_reg[6] <= #1 i_data[3:0];
+                            data_reg[7] <= #1 i_data[7:4];
                         end
                 endcase
     
@@ -108,9 +108,9 @@ module SevenSegmentController
             begin : nibbles
                 HexToSSEG HexToSSEG
                     (
-                    .hex_i   (data_reg[i]),
-                    .dp_i    (dp_reg[i]),
-                    .sseg_n_o(sseg_n[i])
+                    .i_hex   (data_reg[i]),
+                    .i_dp    (dp_reg[i]),
+                    .o_sseg_n(sseg_n[i])
                     );
             end
     endgenerate
@@ -125,7 +125,7 @@ module SevenSegmentController
     
     // refresh counter
     initial refresh_counter_reg = 19'd0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         refresh_counter_reg <= #1 refresh_counter_reg + 19'd1;
     
     // ~762 Hz cycle rate equates to ~95 Hz display refresh rate
@@ -133,17 +133,17 @@ module SevenSegmentController
     
     // anode - essentially a 3-to-8 multiplexer
     initial an_n_reg = 8'hFF;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         an_n_reg <= #1 ~(1 << digit);
     
     // seven-segment digit - 3-to-8 multiplexer
     initial sseg_n_reg = 8'hFF;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         sseg_n_reg <= #1 sseg_n[digit];
     
     
     // output logic
-    assign an_n_o   = an_n_reg | ~digits_reg;
-    assign sseg_n_o = sseg_n_reg;
+    assign o_an_n   = an_n_reg | ~digits_reg;
+    assign o_sseg_n = sseg_n_reg;
     
 endmodule

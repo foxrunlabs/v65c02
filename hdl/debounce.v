@@ -30,10 +30,10 @@ Purpose : Debounce circuit for the v65C02 8-bit Computer.
 
 module Debounce
     (
-    input  clk_i,
+    input  i_clk,
     
-    input  in_i,
-    output out_o
+    input  i_in,
+    output o_out
     );
     
     
@@ -43,10 +43,10 @@ module Debounce
     reg  [17:0] count_reg;
     
     // counting starts if output doesn't equal input
-    assign count_en = (out_reg != in_i);
+    assign count_en = (out_reg != i_in);
     
     initial count_reg = 18'd0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(count_en)
             count_reg <= #1 count_reg + 18'd1;
         else
@@ -63,10 +63,10 @@ module Debounce
     assign out_en = (& count_reg);
     
     initial out_reg = 1'b0;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         if(out_en)
             out_reg <= #1 ~out_reg;
     
-    assign out_o = out_reg;
+    assign o_out = out_reg;
     
 endmodule

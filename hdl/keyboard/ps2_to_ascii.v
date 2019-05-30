@@ -29,13 +29,13 @@ Purpose : PS/2 scan code to ASCII code converter.
 
 module PS2toASCII
     (
-    input  wire       clk_i,                // CPU clock
+    input  wire       i_clk,                // CPU clock
     
-    input  wire       en_i,                 // enable signal
-    input  wire [7:0] scancode_i,           // PS/2 scan code
+    input  wire       i_en,                 // enable signal
+    input  wire [7:0] i_scancode,           // PS/2 scan code
     
-    output wire       rdy_stb_o,            // ASCII code ready strobe
-    output wire [7:0] ascii_o               // ASCII code
+    output wire       o_rdy_stb,            // ASCII code ready strobe
+    output wire [7:0] o_ascii               // ASCII code
     );
     
     
@@ -48,7 +48,7 @@ module PS2toASCII
     
     initial extend_ff = 1'b0;
     initial break_ff  = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         extend_ff <= #1 extend_ns;
         break_ff  <= #1 break_ns;
     end
@@ -64,7 +64,7 @@ module PS2toASCII
     
     initial lctrl_ff = 1'b0;
     initial rctrl_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         lctrl_ff <= #1 lctrl_ns;
         rctrl_ff <= #1 rctrl_ns;
     end
@@ -82,7 +82,7 @@ module PS2toASCII
     
     initial lshift_ff = 1'b0;
     initial rshift_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         lshift_ff <= #1 lshift_ns;
         rshift_ff <= #1 rshift_ns;
     end
@@ -113,7 +113,7 @@ module PS2toASCII
     
     // state machine register
     initial state_reg = S_IDLE;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         state_reg <= #1 state_ns;
     
     // next-state logic
@@ -135,8 +135,8 @@ module PS2toASCII
             // wait for a valid PS/2 scan code
             S_IDLE:
                 begin
-                    if(en_i) begin          // code received
-                        case(scancode_i)
+                    if(i_en) begin          // code received
+                        case(i_scancode)
                             // extended code
                             C_EXTEND:
                                 begin
@@ -167,7 +167,7 @@ module PS2toASCII
                     break_ns  = 1'b0;
                     
                     //- control keys -------------------------------------------
-                    if(scancode_i == C_CTRL) begin
+                    if(i_scancode == C_CTRL) begin
                         if(extend_ff)
                             rctrl_ns = ~break_ff;           // right CTRL
                         else
@@ -175,14 +175,14 @@ module PS2toASCII
                     end
                     
                     //- shift keys ---------------------------------------------
-                    if(scancode_i == C_LSHIFT)
+                    if(i_scancode == C_LSHIFT)
                         lshift_ns = ~break_ff;              // left SHIFT
-                    else if(scancode_i == C_RSHIFT)
+                    else if(i_scancode == C_RSHIFT)
                         rshift_ns = ~break_ff;              // right SHIFT
                     
                     //- control key(s) pressed ---------------------------------
                     if(ctrl) begin
-                        case(scancode_i)
+                        case(i_scancode)
                             8'h15: ascii_ns = 8'h11;        // ^q DC1 
                             8'h1A: ascii_ns = 8'h1A;        // ^z SUB
                             8'h1B: ascii_ns = 8'h13;        // ^s DC3
@@ -226,7 +226,7 @@ module PS2toASCII
                     else begin
                         //- keys that aren't affected by shift key(s) ----------
                         if(extend_ff) begin
-                            case(scancode_i)
+                            case(i_scancode)
                                 8'h6B: ascii_ns = 8'h82;    // left arrow
                                 
                                 8'h72: ascii_ns = 8'h81;    // down arrow
@@ -235,7 +235,7 @@ module PS2toASCII
                             endcase
                         end
                         else begin
-                            case(scancode_i)
+                            case(i_scancode)
                                 8'h01: ascii_ns = 8'hF9;    // F9
                                 8'h03: ascii_ns = 8'hF5;    // F5
                                 8'h04: ascii_ns = 8'hF3;    // F3
@@ -267,7 +267,7 @@ module PS2toASCII
                     
                         //- keys that are affected by shift key(s) -------------
                         if(shift) begin
-                            case(scancode_i)
+                            case(i_scancode)
                                 8'h0E: ascii_ns = 8'h7E;    // ~
                 
                                 8'h15: ascii_ns = 8'h51;    // Q
@@ -325,7 +325,7 @@ module PS2toASCII
                             endcase
                         end
                         else begin
-                            case(scancode_i)
+                            case(i_scancode)
                                 8'h0E: ascii_ns = 8'h60;    // `
                 
                                 8'h15: ascii_ns = 8'h71;    // q
@@ -410,7 +410,7 @@ module PS2toASCII
     assign ascii_valid = (state_reg == S_ASCII) & (ascii_reg != A_INVALID);
     
     initial rdy_ff = 1'b0;
-    always @(posedge clk_i) begin
+    always @(posedge i_clk) begin
         if(ascii_valid)
             rdy_ff <= #1 1'b1;
         else
@@ -418,7 +418,7 @@ module PS2toASCII
     end
     
     // output logic
-    assign rdy_stb_o = rdy_ff;
+    assign o_rdy_stb = rdy_ff;
     
     
 /* ASCII CODE *****************************************************************/
@@ -427,10 +427,10 @@ module PS2toASCII
     reg [7:0] ascii_ns;
     
     initial ascii_reg = 8'h00;
-    always @(posedge clk_i)
+    always @(posedge i_clk)
         ascii_reg <= #1 ascii_ns;
     
     // output logic
-    assign ascii_o = ascii_reg;
+    assign o_ascii = ascii_reg;
     
 endmodule
