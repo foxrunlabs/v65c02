@@ -17,8 +17,8 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : SevenSegmentController
-File Name   : sseg_controller.v
+Module Name : v65SSEG
+File Name   : v65_sseg.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -27,7 +27,7 @@ Purpose : Seven-segment display controller for the v65C02 8-bit Computer.
 *******************************************************************************/
 
 
-module SevenSegmentController
+module v65SSEG
     (
     input wire        i_clk,            // CPU clock
     

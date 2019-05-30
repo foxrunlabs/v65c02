@@ -17,8 +17,8 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : CPUReset
-File Name   : cpu_reset.v
+Module Name : v65Reset
+File Name   : v65_reset.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -31,7 +31,7 @@ Purpose : Reset circuit for the v65C02 8-bit Computer.
 *******************************************************************************/
 
 
-module Reset
+module v65Reset
     (
     input  wire i_clk,              // system clock
     

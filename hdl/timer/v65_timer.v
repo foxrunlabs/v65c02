@@ -17,8 +17,8 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : TimerController
-File Name   : timer_controller.v
+Module Name : v65Timer
+File Name   : v65_timer.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -27,7 +27,7 @@ Purpose : 32-bit timer controller for the v65C02 8-bit Computer.
 *******************************************************************************/
 
 
-module TimerController
+module v65Timer
     (
     input  wire       i_clk,        // CPU clock
     

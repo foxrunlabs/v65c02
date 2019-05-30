@@ -17,8 +17,8 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : UARTController
-File Name   : uart_controller.v
+Module Name : v65UART
+File Name   : v65_uart.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -27,7 +27,7 @@ Purpose : UART controller for the v65C02 8-bit Computer.
 *******************************************************************************/
 
 
-module UARTController
+module v65UART
     (
     input  wire       i_clk,        // CPU clock
     

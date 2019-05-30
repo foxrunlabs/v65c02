@@ -17,8 +17,8 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : KeyboardController
-File Name   : kbd_controller.v
+Module Name : v65Keyboard
+File Name   : v65_keyboard.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -30,7 +30,7 @@ Purpose : PS/2 keyboard controller for the v65C02 8-bit Computer.
 // module (disables it), so that we can write and read to the PS/2 keyboard.
 
 
-module KeyboardController
+module v65Keyboard
     (
     input  wire       i_clk,        // CPU clock
     

@@ -17,8 +17,8 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : ClockGen
-File Name   : clock_gen.v
+Module Name : v65ClockGen
+File Name   : v65_clock_gen.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -30,7 +30,7 @@ Purpose : Clock generator for the v65C02 8-bit Computer.
 *******************************************************************************/
 
 
-module ClockGen
+module v65ClockGen
     (
     input  wire i_clk_nexys,        // 100 MHz input clock
     

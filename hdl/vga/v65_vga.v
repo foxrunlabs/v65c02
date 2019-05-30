@@ -17,8 +17,8 @@ the License.
 *******************************************************************************/
 
 /*******************************************************************************
-Module Name : VGAController
-File Name   : vga_controller.v
+Module Name : v65VGA
+File Name   : v65_vga.v
 Project     : v65C02 8-bit Computer
 Author      : Ryan Clarke
 E-mail      : kj6msg@icloud.com
@@ -81,7 +81,7 @@ Purpose : VGA text-mode controller for the v65C02 8-bit Computer on the
 *******************************************************************************/
 
 
-module VGAController
+module v65VGA
     (
     input  wire        i_clk_cpu,   // CPU clock
     input  wire        i_clk_pixel, // pixel clock
