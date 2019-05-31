@@ -89,7 +89,7 @@ module v65VGA
     // video RAM
     input  wire        i_vram_en,   // video RAM enable
     input  wire        i_vram_we,   // video RAM write enable
-    input  wire [11:0] i_vram_addr, // 12-bit video RAM address
+    input  wire [12:0] i_vram_addr, // 13-bit video RAM address
     input  wire [7:0]  i_vram_din,  // 8-bit video RAM data input
     output wire [7:0]  o_vram_dout, // 8-bit video RAM data output
     
@@ -113,7 +113,7 @@ module v65VGA
                R_CURSL  = 2'b01,
                R_CURSH  = 2'b10;
     
-    reg  [2:0]  status_reg;         // STATUS
+    reg  [1:0]  status_reg;         // STATUS
     reg  [7:0]  cursl_reg;          // CURSL
     reg  [3:0]  cursh_reg;          // CURSH
     wire [11:0] curs_addr;          // 12-bit cursor address
@@ -121,14 +121,14 @@ module v65VGA
     assign curs_addr = {cursh_reg, cursl_reg};
     
     // control registers input
-    initial status_reg = 3'b000;    // display page, cursor off, output off
-    initial cursl_reg  = 8'd0;      // cursor at (0,0)
+    initial status_reg = 2'b00;     // cursor off, output off
+    initial cursl_reg  = 8'h00;     // cursor at (0,0)
     initial cursh_reg  = 4'h0;
     always @(posedge i_clk_cpu)
         if(i_reg_en)
             if(i_reg_we)
                 case(i_reg_sel)
-                    R_STATUS: status_reg <= #1 i_reg_din[2:0];
+                    R_STATUS: status_reg <= #1 i_reg_din[1:0];
                     R_CURSL:  cursl_reg  <= #1 i_reg_din;
                     R_CURSH:  cursh_reg  <= #1 i_reg_din[3:0];
                 endcase
@@ -138,7 +138,7 @@ module v65VGA
     always @(posedge i_clk_cpu)
         if(i_reg_en)
             case(i_reg_sel)
-                R_STATUS: o_reg_dout <= #1 {5'b0000_0, status_reg};
+                R_STATUS: o_reg_dout <= #1 {6'b0000_00, status_reg};
                 R_CURSL:  o_reg_dout <= #1 cursl_reg;
                 R_CURSH:  o_reg_dout <= #1 {4'b0000, cursh_reg};
                 default:  o_reg_dout <= #1 8'd0;
@@ -184,18 +184,19 @@ module v65VGA
     
 /* VIDEO RAM ******************************************************************/
     
-    wire        display_ram_en;     // display RAM enable
-    wire        attribute_ram_en;   // attribute RAM enable
+    wire        display_vram_en;    // display VRAM enable
+    wire        attribute_vram_en;  // attribute VRAM enable
     wire [5:0]  char_row;           // character row
     wire [7:0]  vram2cpu_display_data;
     wire [7:0]  vram2cpu_attribute_data;
     wire [11:0] vga2vram_addr;      // VGA controller to video RAM address
     wire [7:0]  display_data;       // display RAM to VGA controller data
     wire [7:0]  attribute_data;     // attribute RAM to VGA controller data
+    reg         vram_page_ff;       // video RAM page
     
     // display and attribute RAM enables
-    assign display_ram_en   = i_vram_en & (~status_reg[2]);
-    assign attribute_ram_en = i_vram_en & status_reg[2];
+    assign display_vram_en   = i_vram_en & (~i_vram_addr[12]);
+    assign attribute_vram_en = i_vram_en & i_vram_addr[12];
     
     // character row equals scan line mod 16
     assign char_row = crtc_line[9:4];
@@ -205,18 +206,18 @@ module v65VGA
                            {char_row, 6'b00_0000} +
                            {2'b00, char_row, 4'b0000};
     
-    // 4K x 8-bit dual-port video RAM (display page)
+    // 4K x 8-bit dual-port video RAM (character page)
     VRAM_BRAM
         #(
         .WIDTH(8),
         .DEPTH(4096)
         )
-        DisplayRAM
+        CharacterVRAM
         (
         .clka_i (i_clk_cpu),
-        .ena_i  (display_ram_en),
+        .ena_i  (display_vram_en),
         .wea_i  (i_vram_we),
-        .addra_i(i_vram_addr),
+        .addra_i(i_vram_addr[11:0]),
         .dia_i  (i_vram_din),
         .doa_o  (vram2cpu_display_data),
         
@@ -232,12 +233,12 @@ module v65VGA
         .WIDTH(8),
         .DEPTH(4096)
         )
-        AttributeRAM
+        AttributeVRAM
         (
         .clka_i (i_clk_cpu),
-        .ena_i  (attribute_ram_en),
+        .ena_i  (attribute_vram_en),
         .wea_i  (i_vram_we),
-        .addra_i(i_vram_addr),
+        .addra_i(i_vram_addr[11:0]),
         .dia_i  (i_vram_din),
         .doa_o  (vram2cpu_attribute_data),
         
@@ -247,9 +248,13 @@ module v65VGA
         .dob_o  (attribute_data)
         );
     
+    initial vram_page_ff = 1'b0;
+    always @(posedge i_clk_cpu)
+        vram_page_ff <= #1 i_vram_addr[12];
+    
     // output logic
-    assign o_vram_dout = (status_reg[2]) ? vram2cpu_attribute_data
-                                         : vram2cpu_display_data;
+    assign o_vram_dout = (vram_page_ff) ? vram2cpu_attribute_data
+                                        : vram2cpu_display_data;
     
     
 /* CHARACTER GENERATOR ********************************************************/

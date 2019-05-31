@@ -40,9 +40,6 @@
 .DEFINE     VERSION .CONCAT("v65C02 BIOS v", "1.0.0")
 
             ATTRIB = (BLACK << 4) | LIGHT_GRAY  ; light gray on black
-            
-            NUMCOLS = 80                        ; 80 character columns
-            NUMROWS = 30                        ; 30 character rows
 
 
 ;===============================================================================
@@ -61,17 +58,17 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
             sta     VRAML               ; (VRAM) = VRAM start address
             
             ;- clear VRAM ------------------------------------------------------
-@clrscr:    lda     #NUL                ; A = NUL
+@clrscr:    lda     #VRAM_PAGE          ; A = VRAM page bit mask
+            trb     VRAMH               ; set character page
+            
+            lda     #NUL                ; A = NUL
             sta     (VRAM)              ; store NUL to VRAM
             
-            lda     #VGA_PAGE           ; A = PAGE bit mask
-            tsb     VGA_STATUS          ; set attribute page
+            lda     #VRAM_PAGE          ; A = VRAM page bit mask
+            tsb     VRAMH               ; set attribute page
             
             lda     #ATTRIB             ; A = default screen attribute
-            sta     (VRAM)              ; store to VRAM
-            
-            lda     #VGA_PAGE           ; A = PAGE bit mask
-            trb     VGA_STATUS          ; set display page
+            sta     (VRAM)              ; store attribute to VRAM
             
             inc     VRAML               ; increment VRAM address LSB
             bne     @clrscr             ; roll over to $00? no, loop
@@ -109,11 +106,8 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
             lda     #.HIBYTE(bios_tbl_h)
             sta     BIOSTHH
             
-            ;- clear keyboard buffer -------------------------------------------
-            lda     KBD_DATA
-            
             ;- print headers to the screen -------------------------------------
-@headers:   ldx     #.HIBYTE(biosver)
+            ldx     #.HIBYTE(biosver)
             lda     #.LOBYTE(biosver)
             jsr     puts                ; BIOS header
             
@@ -122,7 +116,7 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
             jsr     puts                ; copyright
             
             lda     #LF
-            jsr     putch
+            jsr     teletype
             
             ldx     #.HIBYTE(nodisk)
             lda     #.LOBYTE(nodisk)
@@ -131,6 +125,9 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
             ldx     #.HIBYTE(loading)
             lda     #.LOBYTE(loading)
             jsr     puts                ; loading ROM monitor message
+            
+            ;- clear keyboard buffer -------------------------------------------
+            lda     KBD_DATA
             
             ;- transfer to ROM monitor -----------------------------------------
             jmp     monitor             ; ROM monitor program
@@ -157,10 +154,13 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
 .endproc
 
 
-;= #1 PUTCH ====================================================================
+;= #1 TELETYPE==================================================================
 ; Prints a character to the screen at the current cursor position. Updates the
 ; cursor position after printing. Line feed, backspace, and tab are treated as
 ; commands.
+;
+; Also contains PUTCH, which prints a raw character to the screen at the current
+; cursor position. Does not update the cursor position after printing.
 ;
 ; Parameters: A = character
 ; Returns:    none
@@ -169,7 +169,7 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
 ;
 ; Cycles (jsr->rts):
 
-.proc putch
+.proc teletype
             
             cmp     #LF
             beq     lf                  ; line feed? process
@@ -177,7 +177,7 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
             beq     ht                  ; horizontal tab? process
             cmp     #BS
             beq     bs                  ; backspace? process
-            bra     print               ; print character
+            bra     putch               ; print character
             
             ;- process LF ------------------------------------------------------
 lf:         ldx     #0                  ; column = 0
@@ -213,7 +213,7 @@ bs:         lda     ROW                 ; A = row
             bra     setcurs             ; set cursor
             
             ;- write character to screen ---------------------------------------
-print:      tax                         ; save character
+putch:      tax                         ; save character
             
             lda     VGA_CURSL
             sta     VRAML               ; (VRAM) = 12-bit cursor address
@@ -221,20 +221,14 @@ print:      tax                         ; save character
             ora     #.HIBYTE(__VRAM_START__)
             sta     VRAMH               ; (VRAM) = 16-bit VRAM address
             
-            lda     #VGA_PAGE           ; A = PAGE bit mask
-            trb     VGA_STATUS          ; select display page
-            
             txa                         ; restore character
-            sta     (VRAM)              ; write character to screen
+            sta     (VRAM)              ; write character to VRAM
             
-            lda     #VGA_PAGE
-            tsb     VGA_STATUS          ; select attribute page
+            lda     #VRAM_PAGE
+            tsb     VRAMH               ; set attribute page
             
             lda     ATTR
-            sta     (VRAM)              ; write attribute
-            
-            lda     #VGA_PAGE
-            trb     VGA_STATUS          ; select display page
+            sta     (VRAM)              ; write attribute to VRAM
             
             ldx     COL                 ; X = current column
             cpx     #(NUMCOLS - 1)
@@ -271,7 +265,7 @@ exit:       rts
 @loop:      lda     (STR), Y            ; A = string character
             beq     @exit               ; NUL? exit
             
-            jsr     putch
+            jsr     teletype
             iny                         ; index++
             bne     @loop               ; next character (256 character limit)
             
@@ -355,20 +349,19 @@ exit:       rts
             lda     #.LOBYTE(__VRAM_START__ + NUMCOLS)
             sta     SCROLLL             ; (SCROLL) = address of (0,1)
             
-            lda     #VGA_PAGE
-            trb     VGA_STATUS          ; select display page
-            
 @loop0:     lda     (SCROLL)            ; save character from line below
             sta     (VRAM)              ; copy to line above
             
-            lda     #VGA_PAGE           ; A = PAGE bit mask
-            tsb     VGA_STATUS          ; select attribute page
+            lda     #VRAM_PAGE          ; A = VRAM page bit mask
+            tsb     VRAMH               ; set attribute page
+            tsb     SCROLLH
             
             lda     (SCROLL)            ; save attribute from line below
             sta     (VRAM)              ; copy to line above
             
-            lda     #VGA_PAGE           ; A = PAGE bit mask
-            trb     VGA_STATUS          ; select display page
+            lda     #VRAM_PAGE          ; A = VRAM page bit mask
+            trb     VRAMH               ; set display page
+            trb     SCROLLH
             
             inc     VRAML
             bne     @incscroll          ; VRAML++ rollover to 00? nope
@@ -387,17 +380,17 @@ exit:       rts
             bne     @loop0
             
             ;- clear bottom line -----------------------------------------------
-@loop1:     lda     #NUL
-            sta     (VRAM)
+@loop1:     lda     #NUL                ; A = NUL
+            sta     (VRAM)              ; write character to VRAM
             
-            lda     #VGA_PAGE
-            tsb     VGA_STATUS          ; select attribute page
+            lda     #VRAM_PAGE          ; A = VRAM page bit mask
+            tsb     VRAMH               ; set attribute page
             
-            lda     ATTR
-            sta     (VRAM)              ; default attribute
+            lda     ATTR                ; A = default attribute
+            sta     (VRAM)              ; write attribute to VRAM
             
-            lda     #VGA_PAGE
-            trb     VGA_STATUS          ; select display page
+            lda     #VRAM_PAGE          ; A = VRAM page bit mask
+            trb     VRAMH               ; set character page
             
             inc     VRAML
             lda     VRAML
@@ -511,20 +504,20 @@ irq:        pha                         ; save A
 ; 4 - Scroll screen down one line
 
 bios_tbl_l: .BYTE .LOBYTE(softrst - 1)
-            .BYTE .LOBYTE(putch - 1)
+            .BYTE .LOBYTE(teletype - 1)
             .BYTE .LOBYTE(puts - 1)
             .BYTE .LOBYTE(gotoxy - 1)
             .BYTE .LOBYTE(scrolldn - 1)
             .BYTE .LOBYTE(getkey - 1)
-            .BYTE .LOBYTE(putch::print - 1)
+            .BYTE .LOBYTE(teletype::putch - 1)
 
 bios_tbl_h: .BYTE .HIBYTE(softrst - 1)
-            .BYTE .HIBYTE(putch - 1)
+            .BYTE .HIBYTE(teletype - 1)
             .BYTE .HIBYTE(puts - 1)
             .BYTE .HIBYTE(gotoxy - 1)
             .BYTE .HIBYTE(scrolldn - 1)
             .BYTE .HIBYTE(getkey - 1)
-            .BYTE .HIBYTE(putch::print - 1)
+            .BYTE .HIBYTE(teletype::putch - 1)
 
 
 ;= STRINGS =====================================================================

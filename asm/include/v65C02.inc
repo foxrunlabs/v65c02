@@ -101,6 +101,12 @@ CMDLN   = $28               ; command line address
 ; CONSTANTS
 ;===============================================================================
 
+;= Screen Size =================================================================
+            
+NUMCOLS = 80                ; 80 character columns
+NUMROWS = 30                ; 30 character rows
+
+
 ;= ASCII Character Constants ===================================================
 
 NUL  = $00
@@ -162,27 +168,28 @@ WHITE         = $0F
 ; HARDWARE DEVICES
 ;===============================================================================
 
-;= DEVICE MEMORY MAP ===========================================================
+;= VIDEO RAM ===================================================================
 
-IO          = $AF00
+VRAM_PAGE = %00010000                   ; VRAM page bit mask
+
+
+;= IO MEMORY MAP ===============================================================
+
+IO          = $E000
 
 ;- device 0 --------------------------------------------------------------------
-VGA         = IO + 0
+VGA         = IO + $000
 VGA_STATUS  = VGA + 0
 VGA_CURSL   = VGA + 1
 VGA_CURSH   = VGA + 2
 
 ;- device 1 --------------------------------------------------------------------
-SSEG        = IO + $10
-SSEG_DIGITS = SSEG + 0
-SSEG_DP     = SSEG + 1
-SSEG_BYTE0  = SSEG + 2
-SSEG_BYTE1  = SSEG + 3
-SSEG_BYTE2  = SSEG + 4
-SSEG_BYTE3  = SSEG + 5
+KBD         = IO + $100
+KBD_STATUS  = KBD + 0
+KBD_DATA    = KBD + 1
 
 ;- device 2 --------------------------------------------------------------------
-UART        = IO + $20
+UART        = IO + $200
 UART_STATUS = UART + 0
 UART_BRGL   = UART + 1
 UART_BRGH   = UART + 2
@@ -190,50 +197,54 @@ UART_TXREG  = UART + 3
 UART_RXREG  = UART + 4
 
 ;- device 3 --------------------------------------------------------------------
-KBD         = IO + $30
-KBD_STATUS  = KBD + 0
-KBD_DATA    = KBD + 1
-
-;- device 4 --------------------------------------------------------------------
-TMR         = IO + $40
+TMR         = IO + $300
 TMR_STATUS  = TMR + 0
 TMR_TIMER08 = TMR + 1
 TMR_TIMER16 = TMR + 2
 TMR_TIMER24 = TMR + 3
 TMR_TIMER32 = TMR + 4
 
+;- device 4 --------------------------------------------------------------------
+SSEG        = IO + $400
+SSEG_DIGITS = SSEG + 0
+SSEG_DP     = SSEG + 1
+SSEG_BYTE0  = SSEG + 2
+SSEG_BYTE1  = SSEG + 3
+SSEG_BYTE2  = SSEG + 4
+SSEG_BYTE3  = SSEG + 5
+
 ;- device 5 --------------------------------------------------------------------
-DEVICE5     = IO + $50
+DEVICE5     = IO + $500
 
 ;- device 6 --------------------------------------------------------------------
-DEVICE6     = IO + $60
+DEVICE6     = IO + $600
 
 ;- device 7 --------------------------------------------------------------------
-DEVICE7     = IO + $70
+DEVICE7     = IO + $700
 
 ;- device 8 --------------------------------------------------------------------
-DEVICE8     = IO + $80
+DEVICE8     = IO + $800
 
 ;- device 9 --------------------------------------------------------------------
-DEVICE9     = IO + $90
+DEVICE9     = IO + $900
 
 ;- device 10 -------------------------------------------------------------------
-DEVICE10    = IO + $A0
+DEVICE10    = IO + $A00
 
 ;- device 11 -------------------------------------------------------------------
-DEVICE11    = IO + $B0
+DEVICE11    = IO + $B00
 
 ;- device 12 -------------------------------------------------------------------
-DEVICE12    = IO + $C0
+DEVICE12    = IO + $C00
 
 ;- device 13 -------------------------------------------------------------------
-DEVICE13    = IO + $D0
+DEVICE13    = IO + $D00
 
 ;- device 14 -------------------------------------------------------------------
-DEVICE14    = IO + $E0
+DEVICE14    = IO + $E00
 
 ;- device 15 -------------------------------------------------------------------
-DEVICE15    = IO + $F0
+DEVICE15    = IO + $F00
 
 
 ;= DEVICE REGISTERS ============================================================
@@ -241,7 +252,6 @@ DEVICE15    = IO + $F0
 ;- VGA status register bits ----------------------------------------------------
 VGA_EN       = %00000001                ; EN bit mask of VGA STATUS register
 VGA_CURS     = %00000010                ; CURS bit mask for VGA STATUS register
-VGA_PAGE     = %00000100                ; PAGE bit mask for VGA STATUS register
 
 ;- keyboard status register bits -----------------------------------------------
 KBD_DATAFULL = %00000001                ; keyboard data register full

@@ -65,7 +65,7 @@ module v65C02_Top
     wire clk_cpu;                       // 50 MHz CPU clock
     wire clk_pixel;                     // 25.175 MHz VGA pixel clock
     
-    ClockGen ClockGen
+    v65ClockGen Clock
         (
         .i_clk_nexys(CLK100MHZ),
         .o_clk_cpu  (clk_cpu),
@@ -77,7 +77,7 @@ module v65C02_Top
     
     wire reset;                         // reset signal
     
-    Reset Reset
+    v65Reset Reset
         (
         .i_clk(clk_cpu),
         .i_rst(~CPU_RESETN),
@@ -108,23 +108,23 @@ module v65C02_Top
     
 /* ROM BIOS *******************************************************************/
         
-    wire       bios_en;                     // BIOS select
-    wire [7:0] bios_dout;                   // BIOS 8-bit data out
+    wire       bios_en;                         // BIOS select
+    wire [7:0] bios_dout;                       // BIOS 8-bit data out
     
-    assign bios_en = (& cpu_addr[15:14]);   // BIOS = $C000 -> $FFFF
+    assign bios_en = (cpu_addr[15:12] == 4'hF); // BIOS = $F000-$FFFF
     
-    // 16K x 8-bit ROM
+    // 4K x 8-bit ROM
     ROM_BRAM
         #(
         .WIDTH    (8),
-        .DEPTH    (16384),
+        .DEPTH    (4096),
         .INIT_FILE("bios.hex")
         )
         BIOS
         (
         .i_clk (clk_cpu),
         .i_en  (bios_en),
-        .i_addr(cpu_addr[13:0]),
+        .i_addr(cpu_addr[11:0]),
         .o_data(bios_dout)
         );
     
@@ -134,13 +134,13 @@ module v65C02_Top
     wire       ram_en;                          // RAM select
     wire [7:0] ram_dout;                        // RAM 8-bit data out
     
-    assign ram_en = (cpu_addr[15:8] < 8'hAF);   // RAM = $0000 -> $AEFF
+    assign ram_en = ~(& cpu_addr[15:14]);       // RAM = $0000-$BFFF
     
-    // 44K x 8-bit RAM
+    // 64K x 8-bit RAM
     RAM_BRAM
         #(
         .WIDTH(8),
-        .DEPTH(45056)
+        .DEPTH(65536)
         )
         RAM
         (
@@ -156,10 +156,10 @@ module v65C02_Top
 /* IO PORTS *******************************************************************/
     
     localparam P_VGA  = 4'h0,
-               P_SSEG = 4'h1,
+               P_KBD  = 4'h1,
                P_UART = 4'h2,
-               P_KBD  = 4'h3,
-               P_TMR  = 4'h4;
+               P_TMR  = 4'h3,
+               P_SSEG = 4'h4;
     
     wire       io_en;
     wire [3:0] port;
@@ -169,11 +169,11 @@ module v65C02_Top
     wire       kbd_en;
     wire       tmr_en; 
     
-    // IO ports = $AF00 -> $AFFF
-    assign io_en = (cpu_addr[15:8] == 8'hAF);
+    // IO ports = $E000-$EFFF
+    assign io_en = (cpu_addr[15:12] == 4'hE);
     
-    // 16 IO ports from $AF00 to $AFF0 (16 registers per port)
-    assign port = cpu_addr[7:4];
+    // 16 IO ports from $E0XX to $EFXX
+    assign port = cpu_addr[11:8];
     
     // port enables
     assign vga_reg_en = io_en & (port == P_VGA);
@@ -185,24 +185,23 @@ module v65C02_Top
     
 /* VGA CONTROLLER *************************************************************/
     
-    wire        vga_vram_en;                // video RAM select
-    wire [11:0] vga_vram_addr;              // 12-bit video RAM address
+    wire        vram_en;                    // video RAM select
     wire [7:0]  vga_vram_dout;              // 8-bit video RAM output
     wire [7:0]  vga_reg_dout;               // 8-bit register output
     wire [11:0] vga_rgb;                    // 12-bit RGB444 output
     wire        vga_hsync;                  // horizontal sync
     wire        vga_vsync;                  // vertical sync
     
-    // VRAM = $B000 -> $BFFF
-    assign vga_vram_en = (cpu_addr[15:12] == 4'hB);
+    // VRAM = $C000 -> $DFFF
+    assign vram_en = (cpu_addr[15:13] == 3'b110);
     
-    VGAController VGAController
+    v65VGA VGA
         (
         .i_clk_cpu  (clk_cpu),
         .i_clk_pixel(clk_pixel),
-        .i_vram_en  (vga_vram_en),
+        .i_vram_en  (vram_en),
         .i_vram_we  (cpu_we),
-        .i_vram_addr(cpu_addr[11:0]),
+        .i_vram_addr(cpu_addr[12:0]),
         .i_vram_din (cpu_dout),
         .o_vram_dout(vga_vram_dout),
         .i_reg_en   (vga_reg_en),
@@ -221,25 +220,19 @@ module v65C02_Top
     assign VGA_VS = vga_vsync;
     
     
-/* SEVEN-SEGMENT CONTROLLER ***************************************************/
+/* PS/2 KEYBOARD **************************************************************/
     
-    wire [7:0] sseg_an_n;                   // anode (active low)
-    wire [7:0] sseg_sseg_n;                 // seven-segment digit (active low)
+    wire [7:0] kbd_dout;                    // 8-bit data output
     
-    SevenSegmentController SevenSegmentController
+    v65Keyboard Keyboard
         (
-        .i_clk    (clk_cpu),
-        .i_en     (sseg_en),
-        .i_we     (cpu_we),
-        .i_reg_sel(cpu_addr[2:0]),
-        .i_data   (cpu_dout),
-        .o_an_n   (sseg_an_n),
-        .o_sseg_n (sseg_sseg_n)
+        .i_clk      (clk_cpu),
+        .i_en       (kbd_en),
+        .i_reg_sel  (cpu_addr[0]),
+        .o_data     (kbd_dout),
+        .io_ps2_clk (PS2_CLK),
+        .io_ps2_data(PS2_DATA)
         );
-    
-    // output logic
-    assign AN = sseg_an_n;
-    assign {DP, CG, CF, CE, CD, CC, CB, CA} = sseg_sseg_n;
     
     
 /* UART ***********************************************************************/
@@ -247,7 +240,7 @@ module v65C02_Top
     wire [7:0] uart_dout;                   // 8-bit data output
     wire       uart_tx;                     // serial data output
     
-    UARTController UARTController
+    v65UART UART
         (
         .i_clk    (clk_cpu),
         .i_en     (uart_en),
@@ -263,26 +256,11 @@ module v65C02_Top
     assign UART_RXD_OUT = uart_tx;
     
     
-/* PS/2 KEYBOARD **************************************************************/
-    
-    wire [7:0] kbd_dout;                    // 8-bit data output
-    
-    KeyboardController KeyboardController
-        (
-        .i_clk      (clk_cpu),
-        .i_en       (kbd_en),
-        .i_reg_sel  (cpu_addr[0]),
-        .o_data     (kbd_dout),
-        .io_ps2_clk (PS2_CLK),
-        .io_ps2_data(PS2_DATA)
-        );
-    
-    
 /* 32-BIT TIMER ***************************************************************/
     
     wire [7:0] tmr_dout;                    // 8-bit data output
     
-    TimerController TimerController
+    v65Timer Timer
         (
         .i_clk    (clk_cpu),
         .i_en     (tmr_en),
@@ -291,6 +269,27 @@ module v65C02_Top
         .i_data   (cpu_dout),
         .o_data   (tmr_dout)
         );
+    
+    
+/* SEVEN-SEGMENT CONTROLLER ***************************************************/
+    
+    wire [7:0] sseg_an_n;                   // anode (active low)
+    wire [7:0] sseg_sseg_n;                 // seven-segment digit (active low)
+    
+    v65SSEG SSEG
+        (
+        .i_clk    (clk_cpu),
+        .i_en     (sseg_en),
+        .i_we     (cpu_we),
+        .i_reg_sel(cpu_addr[2:0]),
+        .i_data   (cpu_dout),
+        .o_an_n   (sseg_an_n),
+        .o_sseg_n (sseg_sseg_n)
+        );
+    
+    // output logic
+    assign AN = sseg_an_n;
+    assign {DP, CG, CF, CE, CD, CC, CB, CA} = sseg_sseg_n;
     
     
 /* CPU INPUT DECODING LOGIC ***************************************************/
@@ -310,7 +309,7 @@ module v65C02_Top
     initial en_p1_reg = 8'h00;
     always @(posedge clk_cpu)
         en_p1_reg <= #1 {tmr_en, kbd_en, uart_en, sseg_en,
-                         vga_reg_en, vga_vram_en, ram_en, bios_en};
+                         vga_reg_en, vram_en, ram_en, bios_en};
     
     // v65C02 data input multiplexer
     always @*

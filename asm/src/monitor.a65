@@ -320,7 +320,7 @@ dump:       ;- save snapshot of memory -----------------------------------------
             
 ;= GO ==========================================================================
             
-go:         jsr     $0300               ; execute at $0300
+go:         jsr     $0200               ; execute at $0300
             jmp     monitor             ; reset monitor
             
             
@@ -339,7 +339,7 @@ xmodem:     lda     #1                      ; first block = 1
             sta     XBLOCK
             stz     XCHKSUM
             
-            lda     #$03
+            lda     #$02
             sta     XDATAH
             stz     XDATAL                  ; (XDATA) -> $0300
             
@@ -441,7 +441,7 @@ xmodem:     lda     #1                      ; first block = 1
             lda     #.LOBYTE(wrotemsg)
             bios    #2                      ; wrote address range message
             
-            lda     #$03           
+            lda     #$02          
             jsr     printhex
             lda     #$00
             jsr     printhex                ; print 0300 to screen
@@ -540,7 +540,7 @@ xmodem:     lda     #1                      ; first block = 1
 @loop:      lda     #NUL                ; A = NUL
             sta     (VRAM), Y           ; (VRAM) = NUL
             iny                         ; Y++
-            cpy     #80
+            cpy     #NUMCOLS
             bne     @loop               ; Y == 80? nope, keep clearing
             
             rts
