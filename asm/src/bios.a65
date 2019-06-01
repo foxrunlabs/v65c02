@@ -37,7 +37,7 @@
 
 ;= CONSTANTS ===================================================================
 
-.DEFINE     VERSION .CONCAT("v65C02 BIOS v", "1.0.0")
+.DEFINE     VERSION .CONCAT("v65C02 BIOS v", "1.0.0a")
 
             ATTRIB = (BLACK << 4) | LIGHT_GRAY  ; light gray on black
 
@@ -52,41 +52,10 @@
 
 bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
             
-            lda     #.HIBYTE(__VRAM_START__)
-            sta     VRAMH
-            lda     #.LOBYTE(__VRAM_START__)
-            sta     VRAML               ; (VRAM) = VRAM start address
-            
-            ;- clear VRAM ------------------------------------------------------
-@clrscr:    lda     #VRAM_PAGE          ; A = VRAM page bit mask
-            trb     VRAMH               ; set character page
-            
-            lda     #NUL                ; A = NUL
-            sta     (VRAM)              ; store NUL to VRAM
-            
-            lda     #VRAM_PAGE          ; A = VRAM page bit mask
-            tsb     VRAMH               ; set attribute page
-            
-            lda     #ATTRIB             ; A = default screen attribute
-            sta     (VRAM)              ; store attribute to VRAM
-            
-            inc     VRAML               ; increment VRAM address LSB
-            bne     @clrscr             ; roll over to $00? no, loop
-            
-            inc     VRAMH               ; increment VRAM address MSB
-            lda     VRAMH               ; A = VRAM address MSB
-            cmp     #.HIBYTE(__VRAM_START__ + __VRAM_SIZE__)
-            bne     @clrscr             ; equal to VRAM upper limit? no, loop
-            
-            stz     VGA_CURSH
-            stz     VGA_CURSL           ; set cursor to (0,0)
-            stz     COL
-            stz     ROW                 ; update stored cursor coordinates
             lda     #ATTRIB
-            sta     ATTR                ; set ATTR to default screen attribute
+            sta     ATTR                ; set default attribute
             
-            lda     #VGA_EN             ; VGA enabled, cursor disabled
-            sta     VGA_STATUS          ; VGA on, cursor off, sel. display page
+            jsr     clrscr              ; clear screen
             
             ;- SSEG initialization ---------------------------------------------
             stz     SSEG_DIGITS
@@ -139,7 +108,7 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
 
 .CODE
 
-;= #0 SOFTRST ==================================================================
+;= #0 SOFT RESET ===============================================================
 ; Soft reset. Sets/resets the appropriate flags and jumps to the reset vector.
 ;
 ; Parameters: none
@@ -154,127 +123,58 @@ bios:       stz     VGA_STATUS          ; VGA & cursor off, select display page
 .endproc
 
 
-;= #1 TELETYPE==================================================================
-; Prints a character to the screen at the current cursor position. Updates the
-; cursor position after printing. Line feed, backspace, and tab are treated as
-; commands.
+;= #1 CLEAR SCREEN =============================================================
+; Clear screen with attribute stored in ATTR. Resets cursor to (0,0).
 ;
-; Also contains PUTCH, which prints a raw character to the screen at the current
-; cursor position. Does not update the cursor position after printing.
-;
-; Parameters: A = character
+; Parameters: none
 ; Returns:    none
 ;
-; Destroys: X, VRAML, VRAMH
-;
-; Cycles (jsr->rts):
+; Destroys: A, VRAML, VRAMH
 
-.proc teletype
+.proc clrscr
+            lda     #VGA_EN
+            trb     VGA_STATUS          ; turn off display
             
-            cmp     #LF
-            beq     lf                  ; line feed? process
-            cmp     #HT
-            beq     ht                  ; horizontal tab? process
-            cmp     #BS
-            beq     bs                  ; backspace? process
-            bra     putch               ; print character
+            ;- point VRAM to VRAM start address --------------------------------
+            lda     #.HIBYTE(__VRAM_START__)
+            sta     VRAMH
+            lda     #.LOBYTE(__VRAM_START__)
+            sta     VRAML
             
-            ;- process LF ------------------------------------------------------
-lf:         ldx     #0                  ; column = 0
-            lda     ROW                 ; A = row
-            inc     A                   ; row++
-            cmp     #NUMROWS
-            bne     setcurs             ; NUMROWS? nope
+loop0:      lda     #VRAM_PAGE          ; A = VRAM page bit mask
+            trb     VRAMH               ; set character page
             
-            jsr     scrolldn            ; scroll display
-            lda     #(NUMROWS - 1)      ; row = NUMROWS - 1
-            bra     setcurs
-                        
-            ;- process HT ----------_-------------------------------------------
-ht:         lda     COL                 ; A = column
-            cmp     #(NUMCOLS - 8)
-            bcs     lf                  ; column >= NUMROWS - 8? new line
+            lda     #NUL                ; A = NUL
+            sta     (VRAM)              ; store NUL to VRAM
             
-            and     #%11111000          ; clear lower three bits of column
-            adc     #8                  ; advance to next tab stop (carry clear)
-            tax                         ; X = new column
-            lda     ROW
-            bra     setcurs
-            
-            ;- process BS --------------_---------------------------------------
-bs:         lda     ROW                 ; A = row
-            ldx     COL                 ; X = column
-            dex                         ; column--
-            bpl     setcurs             ; bit 7 set? nope, set cursor
-            
-            ldx     #(NUMCOLS - 1)      ; column = 79
-            dec     A                   ; row--
-            bmi     exit                ; negative? do nothing
-            bra     setcurs             ; set cursor
-            
-            ;- write character to screen ---------------------------------------
-putch:      tax                         ; save character
-            
-            lda     VGA_CURSL
-            sta     VRAML               ; (VRAM) = 12-bit cursor address
-            lda     VGA_CURSH
-            ora     #.HIBYTE(__VRAM_START__)
-            sta     VRAMH               ; (VRAM) = 16-bit VRAM address
-            
-            txa                         ; restore character
-            sta     (VRAM)              ; write character to VRAM
-            
-            lda     #VRAM_PAGE
+            lda     #VRAM_PAGE          ; A = VRAM page bit mask
             tsb     VRAMH               ; set attribute page
             
-            lda     ATTR
-            sta     (VRAM)              ; write attribute to VRAM
+            lda     ATTR                ; A = screen attribute
+            sta     (VRAM)              ; store attribute to VRAM
             
-            ldx     COL                 ; X = current column
-            cpx     #(NUMCOLS - 1)
-            beq     lf                  ; column == 79? new line
-
-            inx                         ; column++
-            lda     ROW                 ; A = current row
+            inc     VRAML               ; increment VRAM address LSB
+            bne     loop0               ; roll over to $00? no, loop
             
-setcurs:    jsr     gotoxy              ; update cursor position
+            inc     VRAMH               ; increment VRAM address MSB
+            lda     VRAMH               ; A = VRAM address MSB
+            cmp     #.HIBYTE(__VRAM_START__ + __VRAM_SIZE__)
+            bne     loop0               ; equal to VRAM upper limit? no, loop
             
-exit:       rts
+            stz     VGA_CURSH
+            stz     VGA_CURSL           ; set cursor to (0,0)
+            stz     COL
+            stz     ROW                 ; update stored cursor coordinates
+            
+            lda     #VGA_EN
+            tsb     VGA_STATUS          ; turn on display
+            
+            rts
 
 .endproc
 
 
-;= #2 PUTS =====================================================================
-; Prints a null terminated string to the screen. Updates the cursor position
-; after printing.
-;
-; Parameters: X = &string<15:8>
-;             A = &string<7:0>
-; Returns:    none
-;
-; Destroys: Y, STRL, STRH
-;
-; Cycles (jsr->rts): 48 - [205 * strlen + 8]
-
-.proc puts
-            
-            stx     STRH
-            sta     STRL                ; (STR) = string address
-            
-            ldy     #0                  ; Y = string index
-@loop:      lda     (STR), Y            ; A = string character
-            beq     @exit               ; NUL? exit
-            
-            jsr     teletype
-            iny                         ; index++
-            bne     @loop               ; next character (256 character limit)
-            
-@exit:      rts
-
-.endproc
-
-
-;= #3 GOTOXY ===================================================================
+;= #2 SET CURSOR POSITION ======================================================
 ; Moves the cursor to a screen position.
 ;
 ; Parameters: X = column
@@ -324,20 +224,20 @@ exit:       rts
             adc     CURSTMP
             sta     VGA_CURSH
             
-@done:      rts
+            rts
 
 .endproc
 
 
-;= #4 SCROLLDN =================================================================
-; Scrolls the display down a line.
+;= #3 SCROLL UP ================================================================
+; Scrolls the display up a line.
 ;
 ; Parameters: none
 ; Returns:    none
 ;
 ; Destroys: A
 
-.proc scrolldn
+.proc scrollup
         
             lda     #.HIBYTE(__VRAM_START__)
             sta     VRAMH
@@ -349,7 +249,7 @@ exit:       rts
             lda     #.LOBYTE(__VRAM_START__ + NUMCOLS)
             sta     SCROLLL             ; (SCROLL) = address of (0,1)
             
-@loop0:     lda     (SCROLL)            ; save character from line below
+loop0:      lda     (SCROLL)            ; save character from line below
             sta     (VRAM)              ; copy to line above
             
             lda     #VRAM_PAGE          ; A = VRAM page bit mask
@@ -364,23 +264,23 @@ exit:       rts
             trb     SCROLLH
             
             inc     VRAML
-            bne     @incscroll          ; VRAML++ rollover to 00? nope
+            bne     incscroll           ; VRAML++ rollover to 00? nope
             inc     VRAMH               ; yes, VRAMH++
             
-@incscroll: inc     SCROLLL
-            bne     @bounds             ; SCROLLL++ rollover to 00? nope
+incscroll:  inc     SCROLLL
+            bne     bounds              ; SCROLLL++ rollover to 00? nope
             inc     SCROLLH             ; yes, SCROLLH++
             
             ;- bounds check (SCROLL) against screen end ------------------------            
-@bounds:    lda     SCROLLH
+bounds:    lda      SCROLLH
             cmp     #.HIBYTE(__VRAM_START__ + (NUMCOLS * NUMROWS))
-            bne     @loop0
+            bne     loop0
             lda     SCROLLL
             cmp     #.LOBYTE(__VRAM_START__ + (NUMCOLS * NUMROWS))
-            bne     @loop0
+            bne     loop0
             
             ;- clear bottom line -----------------------------------------------
-@loop1:     lda     #NUL                ; A = NUL
+loop1:      lda     #NUL                ; A = NUL
             sta     (VRAM)              ; write character to VRAM
             
             lda     #VRAM_PAGE          ; A = VRAM page bit mask
@@ -395,14 +295,247 @@ exit:       rts
             inc     VRAML
             lda     VRAML
             cmp     #.LOBYTE(__VRAM_START__ + (NUMCOLS * NUMROWS))
-            bne     @loop1    
+            bne     loop1    
             
             rts
 
 .endproc
 
 
-;= #5 GETKEY ===================================================================
+;= #4 SCROLL DOWN ==============================================================
+; Scrolls the display down a line.
+;
+; Parameters: none
+; Returns:    none
+
+.proc scrolldn
+            
+            rts
+
+.endproc
+
+
+;= #5 READ ATTRIBUTE/CHARACTER AT CURSOR =======================================
+; Reads the attribute and character at the current cursor position.
+;
+; Parameters: none
+; Returns:    none
+
+.proc getchattr
+            
+            rts
+
+.endproc
+
+
+;= #6 WRITE ATTRIBUTE/CHARACTER AT CURSOR =======================================
+; Write an attribute and raw character at the current cursor position.
+;
+; Parameters: A    = character
+;             ATTR = attribute
+; Returns:    none
+
+.proc putchattr
+            pha                         ; save character
+            
+            ;- convert 12-bit cursor address to 16-bit VRAM address
+            lda     VGA_CURSH
+            ora     #.HIBYTE(__VRAM_START__)
+            sta     VRAMH
+            lda     VGA_CURSL
+            sta     VRAML
+            
+            lda     #VRAM_PAGE
+            tsb     VRAMH               ; set attribute page
+            
+            lda     ATTR
+            sta     (VRAM)              ; write attribute to VRAM
+            
+            lda     #VRAM_PAGE
+            trb     VRAMH               ; set character page
+            
+            pla                         ; restore character
+            jmp     putch               ; write character
+            
+            rts
+
+.endproc
+
+
+;= #7 WRITE CHARACTER AT CURSOR ================================================
+; Write a raw character at the current cursor position.
+;
+; Parameters: A    = character
+; Returns:    none
+;
+; Destroys: VRAML, VRAMH
+
+.proc putch
+            
+            pha                         ; save character
+            
+            ;- convert 12-bit cursor address to 16-bit VRAM address
+            lda     VGA_CURSH
+            ora     #.HIBYTE(__VRAM_START__)
+            sta     VRAMH
+            lda     VGA_CURSL
+            sta     VRAML
+            
+            pla                         ; restore character
+            sta     (VRAM)              ; write character to VRAM
+            
+            rts
+
+.endproc
+
+
+;= #8 WRITE TELETYPE TO SCREEN =================================================
+; Prints a character to the screen at the current cursor position. Updates the
+; cursor position after printing. Line feed, backspace, and tab are treated as
+; commands.
+;
+; Also contains PUTCH, which prints a raw character to the screen at the current
+; cursor position. Does not update the cursor position after printing.
+;
+; Parameters: A = character
+; Returns:    none
+;
+; Destroys: X, VRAML, VRAMH
+;
+; Cycles (jsr->rts):
+
+.proc teletype
+            
+            cmp     #LF
+            beq     lf                  ; line feed? process
+            cmp     #HT
+            beq     ht                  ; horizontal tab? process
+            cmp     #BS
+            beq     bs                  ; backspace? process
+            bra     print               ; print character
+            
+            ;- process LF ------------------------------------------------------
+lf:         ldx     #0                  ; column = 0
+            lda     ROW                 ; A = row
+            inc     A                   ; row++
+            cmp     #NUMROWS
+            bne     setcurs             ; NUMROWS? nope
+            
+            jsr     scrollup            ; scroll display
+            lda     #(NUMROWS - 1)      ; row = NUMROWS - 1
+            bra     setcurs
+                        
+            ;- process HT ----------_-------------------------------------------
+ht:         lda     COL                 ; A = column
+            cmp     #(NUMCOLS - 8)
+            bcs     lf                  ; column >= NUMROWS - 8? new line
+            
+            and     #%11111000          ; clear lower three bits of column
+            adc     #8                  ; advance to next tab stop (carry clear)
+            tax                         ; X = new column
+            lda     ROW
+            bra     setcurs
+            
+            ;- process BS --------------_---------------------------------------
+bs:         lda     ROW                 ; A = row
+            ldx     COL                 ; X = column
+            dex                         ; column--
+            bpl     setcurs             ; bit 7 set? nope, set cursor
+            
+            ldx     #(NUMCOLS - 1)      ; column = 79
+            dec     A                   ; row--
+            bmi     exit                ; negative? do nothing
+            bra     setcurs             ; set cursor
+            
+            ;- write character to screen ---------------------------------------
+print:      tax                         ; save character
+            
+            lda     VGA_CURSL
+            sta     VRAML               ; (VRAM) = 12-bit cursor address
+            lda     VGA_CURSH
+            ora     #.HIBYTE(__VRAM_START__)
+            sta     VRAMH               ; (VRAM) = 16-bit VRAM address
+            
+            txa                         ; restore character
+            sta     (VRAM)              ; write character to VRAM
+            
+            lda     #VRAM_PAGE
+            tsb     VRAMH               ; set attribute page
+            
+            lda     ATTR
+            sta     (VRAM)              ; write attribute to VRAM
+            
+            ldx     COL                 ; X = current column
+            cpx     #(NUMCOLS - 1)
+            beq     lf                  ; column == 79? new line
+
+            inx                         ; column++
+            lda     ROW                 ; A = current row
+            
+setcurs:    jsr     gotoxy              ; update cursor position
+            
+exit:       rts
+
+.endproc
+
+
+;= #9 PUTS =====================================================================
+; Prints a null terminated string to the screen. Updates the cursor position
+; after printing.
+;
+; Parameters: X = &string<15:8>
+;             A = &string<7:0>
+; Returns:    none
+;
+; Destroys: Y, STRL, STRH
+;
+; Cycles (jsr->rts): 48 - [205 * strlen + 8]
+
+.proc puts
+            
+            stx     STRH
+            sta     STRL                ; (STR) = string address
+            
+            ldy     #0                  ; Y = string index
+loop0:      lda     (STR), Y            ; A = string character
+            beq     exit                ; NUL? exit
+            
+            jsr     teletype
+            iny                         ; index++
+            bne     loop0               ; next character (256 character limit)
+            
+exit:       rts
+
+.endproc
+
+
+;= #10 SEND BYTE ===============================================================
+; Sends a byte via the UART.
+;
+; Parameters: none
+; Returns:    none
+
+.proc uarttx
+            
+            rts
+
+.endproc
+
+
+;= #11 RECEIVE BYTE ============================================================
+; Receive a byte via the UART.
+;
+; Parameters: none
+; Returns:    none
+
+.proc uartrx
+            
+            rts
+
+.endproc
+
+
+;= #12 GETKEY ===================================================================
 ; Wait for keystroke and read.
 ;
 ; Parameters: none
@@ -497,27 +630,34 @@ irq:        pha                         ; save A
 .RODATA
 
 ;= BIOS CALL TABLE =============================================================
-; 0 - Soft reset
-; 1 - Write character at current cursor
-; 2 - Write string at current cursor
-; 3 - Set cursor position
-; 4 - Scroll screen down one line
 
 bios_tbl_l: .BYTE .LOBYTE(softrst - 1)
+            .BYTE .LOBYTE(clrscr - 1)
+            .BYTE .LOBYTE(gotoxy - 1)
+            .BYTE .LOBYTE(scrollup - 1)
+            .BYTE .LOBYTE(scrolldn - 1)
+            .BYTE .LOBYTE(getchattr - 1)
+            .BYTE .LOBYTE(putchattr - 1)
+            .BYTE .LOBYTE(putch - 1)
             .BYTE .LOBYTE(teletype - 1)
             .BYTE .LOBYTE(puts - 1)
-            .BYTE .LOBYTE(gotoxy - 1)
-            .BYTE .LOBYTE(scrolldn - 1)
+            .BYTE .LOBYTE(uarttx - 1)
+            .byte .LOBYTE(uartrx - 1)
             .BYTE .LOBYTE(getkey - 1)
-            .BYTE .LOBYTE(teletype::putch - 1)
 
 bios_tbl_h: .BYTE .HIBYTE(softrst - 1)
+            .BYTE .HIBYTE(clrscr - 1)
+            .BYTE .HIBYTE(gotoxy - 1)
+            .BYTE .HIBYTE(scrollup - 1)
+            .BYTE .HIBYTE(scrolldn - 1)
+            .BYTE .HIBYTE(getchattr - 1)
+            .BYTE .HIBYTE(putchattr - 1)
+            .BYTE .HIBYTE(putch - 1)
             .BYTE .HIBYTE(teletype - 1)
             .BYTE .HIBYTE(puts - 1)
-            .BYTE .HIBYTE(gotoxy - 1)
-            .BYTE .HIBYTE(scrolldn - 1)
+            .BYTE .HIBYTE(uarttx - 1)
+            .BYTE .HIBYTE(uartrx - 1)
             .BYTE .HIBYTE(getkey - 1)
-            .BYTE .HIBYTE(teletype::putch - 1)
 
 
 ;= STRINGS =====================================================================

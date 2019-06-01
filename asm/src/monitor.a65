@@ -73,12 +73,12 @@ monitor:    lda     #VGA_CURS           ; CURS bit mask
 ;= GET COMMAND LINE ============================================================
 
 getcmdln:   lda     #'-'
-            bios    #1                  ; print command prompt
+            bios    #$08                ; print command prompt
             
             ldx     #0                  ; X = string index
             
             ;- get keystroke ---------------------------------------------------
-@getkey:    bios    #5                  ; wait for keystroke and read
+@getkey:    bios    #$0C                ; wait for keystroke and read
             
             ;- evaluate keystroke ----------------------------------------------
             cmp     #ESC
@@ -100,7 +100,7 @@ getcmdln:   lda     #'-'
             inx                         ; next string position
             
             phx                         ; save string index
-            bios    #1                  ; print character to screen
+            bios    #$08                ; print character to screen
             plx                         ; restore string index
             
             bra     @getkey             ; keep getting characters
@@ -116,11 +116,11 @@ getcmdln:   lda     #'-'
             dex                         ; decrement string index
             
             phx                         ; save string index
-            bios    #1                  ; write backspace to screen
+            bios    #$08                ; write backspace to screen
             lda     #NUL
-            bios    #1                  ; write NUL to screen
+            bios    #$08                ; write NUL to screen
             lda     #BS
-            bios    #1                  ; reset cursor with backspace
+            bios    #$08                ; reset cursor with backspace
             plx                         ; restore string index
             
             bra     @getkey             ; keep getting characters
@@ -129,7 +129,7 @@ getcmdln:   lda     #'-'
 @lf:        stz     CMDLN, X            ; add NUL terminator
             
             phx
-            bios    #1                  ; print LF
+            bios    #$08                ; print LF
             plx
             
             
@@ -248,7 +248,7 @@ parsecmdln: stz     MODE                ; address mode (0)
             ;- invalid command -------------------------------------------------
 @invalid:   ldx     #.HIBYTE(invalidmsg)
             lda     #.LOBYTE(invalidmsg)
-            bios    #2                  ; invalid command
+            bios    #$09                ; invalid command
             
             jmp     getcmdln            ; go get another one command line
             
@@ -269,9 +269,9 @@ dump:       ;- save snapshot of memory -----------------------------------------
             jsr     printhex            ; print to screen
             
             lda     #':'
-            bios    #1                  ; print ':'
+            bios    #$08                ; print ':'
             lda     #' '
-            bios    #1                  ; print ' '
+            bios    #$08                ; print ' '
             
             ;- print bytes -----------------------------------------------------
             ldy     #0                  ; Y = offset
@@ -280,7 +280,7 @@ dump:       ;- save snapshot of memory -----------------------------------------
             phy
             jsr     printhex
             lda     #' '
-            bios    #1                  ; print space
+            bios    #$08                ; print space
             ply                         ; reset offset
             
             iny                         ; offset++
@@ -289,7 +289,7 @@ dump:       ;- save snapshot of memory -----------------------------------------
             
             ;- print ASCII representation --------------------------------------
             lda     #'['
-            bios    #1                  ; print '['
+            bios    #$08                ; print '['
             
             ldy     #0                  ; Y = offset
 @ascii:     lda     BUF, Y              ; A = byte
@@ -302,7 +302,7 @@ dump:       ;- save snapshot of memory -----------------------------------------
 @noprint:   lda     #'.'                ; non-printable characters as '.'
             
 @print:     phy                         ; save offset
-            bios    #1                  ; print ASCII representation
+            bios    #$08                ; print ASCII representation
             ply                         ; restore offset
             
             iny                         ; offset++
@@ -310,10 +310,10 @@ dump:       ;- save snapshot of memory -----------------------------------------
             bne     @ascii              ; offset == 16? nope, keep doing it
             
             lda     #']'
-            bios    #1                  ; print ']'
+            bios    #$08                ; print ']'
             
             lda     #LF
-            bios    #1                  ; line feed
+            bios    #$08                ; line feed
             
             jmp     getcmdln
             
@@ -328,7 +328,7 @@ go:         jsr     $0200               ; execute at $0300
             
 help:       ldx     #.HIBYTE(helpmsg)
             lda     #.LOBYTE(helpmsg)
-            bios    #2
+            bios    #$09
             
             jmp     getcmdln
             
@@ -439,7 +439,7 @@ xmodem:     lda     #1                      ; first block = 1
             ;- completion message ----------------------------------------------         
             ldx     #.HIBYTE(wrotemsg)
             lda     #.LOBYTE(wrotemsg)
-            bios    #2                      ; wrote address range message
+            bios    #$09                    ; wrote address range message
             
             lda     #$02          
             jsr     printhex
@@ -447,7 +447,7 @@ xmodem:     lda     #1                      ; first block = 1
             jsr     printhex                ; print 0300 to screen
             
             lda     #'-'
-            bios    #1
+            bios    #$08
             
             sec
             lda     XDATAL
@@ -463,21 +463,21 @@ xmodem:     lda     #1                      ; first block = 1
             jsr     printhex                ; print XDATA - 1 to screen
             
             lda     #LF
-            bios    #1
+            bios    #$08
             
 @exit:      jmp     getcmdln                ; get new command line
             
             ;- timeout message -------------------------------------------------
 @timeout:   ldx     #.HIBYTE(timeoutmsg)
             lda     #.LOBYTE(timeoutmsg)
-            bios    #2                      ; timeout string
+            bios    #$09                    ; timeout string
             
             bra     @exit                   ; done
 
             ;- failure message -------------------------------------------------
 @fail:      ldx     #.HIBYTE(failmsg)
             lda     #.LOBYTE(failmsg)
-            bios    #2                      ; failed string
+            bios    #$09                    ; failed string
             
             bra     @exit                   ; done
             
@@ -528,7 +528,7 @@ xmodem:     lda     #1                      ; first block = 1
             
             ldx     #0
             lda     ROW
-            bios    #3                  ; set cursor to (0,ROW)
+            bios    #$02                ; set cursor to (0,ROW)
             
             lda     VGA_CURSL
             sta     VRAML               ; (VRAM) = 12-bit cursor address
@@ -567,7 +567,7 @@ xmodem:     lda     #1                      ; first block = 1
             cmp     #$0A                ; set carry if A >= $0A
             adc     #$30                ; BCD add to convert to ASCII
             cld                         ; set binary mode
-            bios    #1                  ; print to screen
+            bios    #$08                ; print to screen
             
             pla                         ; restore byte
             sed                         ; decimal mode
@@ -575,7 +575,7 @@ xmodem:     lda     #1                      ; first block = 1
             cmp     #$0A                ; set carry if A >= $0A
             adc     #$30                ; BCD add to convert to ASCII
             cld                         ; binary mode
-            bios    #1                  ; print to screen
+            bios    #$08                ; print to screen
             
             rts
 
