@@ -35,58 +35,34 @@ module v65Reset
     (
     input  wire i_clk,              // system clock
     
-    input  wire i_rst,              // reset input
+    input  wire i_trig,             // trigger input
     output wire o_rst               // reset ouput
     );
     
     
-/* SYNCHRONIZER ***************************************************************/
-    
-    reg rst_async_ff;               // reset synchronizer
-    reg rst_sync_ff;
-    
-    initial rst_async_ff = 1'b0;
-    initial rst_sync_ff  = 1'b0;
-    always @(posedge i_clk) begin
-        rst_async_ff <= #1 i_rst;
-        rst_sync_ff  <= #1 rst_async_ff;
-    end
-    
-    
-/* DEBOUNCE *******************************************************************/
-    
-    wire rst_db;                    // debounce reset button
-    
-    Debounce Debounce
-        (
-        .i_clk(i_clk),
-        .i_in (rst_sync_ff),
-        .o_out(rst_db)
-        );
-    
-    
 /* RISING EDGE DETECTOR *******************************************************/
     
-    reg  rst_prev_ff;               // previous reset input
-    wire rst_re;                    // reset rising-edge
+    reg  trig_prev_ff;              // previous trigger input
+    wire trig_re;                   // trigger rising-edge
     
-    initial rst_prev_ff = 1'b0;
+    initial trig_prev_ff = 1'b0;
     always @(posedge i_clk)
-        rst_prev_ff <= #1 rst_db;
+        trig_prev_ff <= #1 i_trig;
     
-    assign rst_re = ~rst_prev_ff & rst_db;
+    assign trig_re = ~trig_prev_ff & i_trig;
     
     
 /* RESET SIGNAL ***************************************************************/
     
     reg  [2:0] count_reg;           // clock cycle counter
     
-    initial count_reg = 3'd0;
-    always @(posedge i_clk)
-        if(rst_re)
-            count_reg <= #1 3'd0;
+    initial count_reg = 3'o0;
+    always @(posedge i_clk) begin
+        if(trig_re)
+            count_reg <= #1 3'o0;
         else if(~count_reg[2])
-            count_reg <= #1 count_reg + 3'd1;
+            count_reg <= #1 count_reg + 3'o1;
+    end
     
     assign o_rst = ~count_reg[2];
     

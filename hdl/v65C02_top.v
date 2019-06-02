@@ -75,13 +75,36 @@ module v65C02_Top
     
 /* RESET CIRCUIT **************************************************************/
     
+    wire rst_btn;                       // reset button
+    reg  rst_btn_async_ff;              // reset button synchronizer
+    reg  rst_btn_sync_ff;
+    wire rst_btn_db;                    // debounced reset button
     wire reset;                         // reset signal
     
-    v65Reset Reset
+    assign rst_btn = ~CPU_RESETN;       // switch to active-high
+    
+    // synchronize the asynchronous external input
+    initial rst_btn_async_ff = 1'b0;
+    initial rst_btn_sync_ff  = 1'b0;
+    always @(posedge clk_cpu) begin
+        rst_btn_async_ff <= #1 rst_btn;
+        rst_btn_sync_ff  <= #1 rst_btn_async_ff;
+    end
+    
+    // debounce the reset button
+    Debounce Debounce
         (
         .i_clk(clk_cpu),
-        .i_rst(~CPU_RESETN),
-        .o_rst(reset)
+        .i_in (rst_btn_sync_ff),
+        .o_out(rst_btn_db)
+        );
+    
+    // reset logic
+    v65Reset Reset
+        (
+        .i_clk (clk_cpu),
+        .i_trig(rst_btn_db),
+        .o_rst (reset)
         );
     
     
